@@ -307,6 +307,7 @@ table#task-table{
 }
 .name-input{font-weight:inherit;}
 input.date-input{width:118px; font-family:var(--font-mono); font-size:11.5px;}
+input.date-input.date-copied-flash{background:var(--accent-light); transition:background .1s;}
 input.dur-input{width:36px; font-family:var(--font-mono); text-align:right; -moz-appearance:textfield;}
 input.dur-input::-webkit-outer-spin-button, input.dur-input::-webkit-inner-spin-button{ -webkit-appearance:none; margin:0; }
 input.dur-input:focus::-webkit-outer-spin-button, input.dur-input:focus::-webkit-inner-spin-button{ -webkit-appearance:auto; margin:revert; }
@@ -332,6 +333,8 @@ input.res-input{width:100%; min-width:100px; overflow:hidden; text-overflow:elli
 }
 .chip-btn.filled{border-style:solid; border-color:var(--accent); color:var(--accent-dark); background:var(--accent-light);}
 .lock-toggle{font-size:10px; color:var(--text-mute); display:flex; align-items:center; gap:3px; margin-top:1px;}
+.milestone-done-stack{display:flex; flex-direction:column; align-items:center; gap:2px;}
+.milestone-done-stack .stack-label{font-size:10px; color:var(--text-mute); line-height:1;}
 .lock-toggle input{margin:0;}
 #task-table-empty{padding:60px 20px; text-align:center; color:var(--text-mute);}
 
@@ -354,9 +357,14 @@ input.res-input{width:100%; min-width:100px; overflow:hidden; text-overflow:elli
 /* ---------- Popover ---------- */
 .popover{
   position:absolute; z-index:100; background:var(--paper); border:1px solid var(--line-strong);
-  border-radius:8px; box-shadow:0 8px 24px rgba(20,25,35,.18); padding:10px; min-width:220px; max-height:260px; overflow:auto;
+  border-radius:8px; box-shadow:0 8px 24px rgba(20,25,35,.18); padding:10px; min-width:220px; max-width:300px;
 }
 .popover h4{margin:0 0 6px; font-size:11px; text-transform:uppercase; color:var(--text-mute); letter-spacing:.4px;}
+.popover-filter{
+  width:100%; box-sizing:border-box; padding:5px 8px; margin-bottom:6px; border:1px solid var(--line-strong);
+  border-radius:5px; font-size:12px; background:var(--paper); color:var(--text);
+}
+.popover-rows{max-height:220px; overflow:auto;}
 .pop-row{display:flex; align-items:center; gap:6px; padding:4px 2px; font-size:12.5px; border-radius:4px;}
 .pop-row:hover{background:var(--accent-light);}
 .pop-row .dep-name{flex:1; min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;}
@@ -881,7 +889,7 @@ function buildStaticTaskListHtml(){
     const overdue = !isParent && t.end && t.end<today && t.percentComplete<100;
     const notesText = [t.description, t.notes].filter(Boolean).join(' — ');
     html += `<tr class="task-row ${isParent?'is-parent':''} ${overdue?'is-overdue':''}">
-        <td class="col-name"><div class="name-wrap" style="padding-left:${depth*16}px;"><span>${escapeHtml(t.name)}</span></div></td>
+        <td class="col-name"><div class="name-wrap" style="padding-left:${depth*16}px;"><span>${escapeHtml(displayName(t))}</span></div></td>
         <td class="status-cell">${statusDotHtml(t.status)}</td>
         <td>${fmtDate(t.start)}</td>
         <td>${fmtDate(t.end)}</td>
@@ -944,7 +952,7 @@ function buildGanttTimelineHtml(opts){
     const barLabel = showResourceOnBar && barW>28 ? escapeHtml((t.resources||[]).join(', ')) : '';
     const timelineInner = milestone
       ? `<div class="g-milestone ${overdue?'overdue':''} ${t.percentComplete>=100?'done':''}" style="left:${barX+DW/2}px; top:${ROW_H_S/2}px;" title="${escapeAttr(tip)}"></div>
-         <div class="g-milestone-label" style="left:${barX+DW/2+10}px; top:${ROW_H_S/2}px; font-size:${Math.max(9,ROW_H_S*0.34)}px;">${escapeHtml(t.name)}</div>`
+         <div class="g-milestone-label" style="left:${barX+DW/2+10}px; top:${ROW_H_S/2}px; font-size:${Math.max(9,ROW_H_S*0.34)}px;">${escapeHtml(displayName(t))}</div>`
       : `<div class="g-bar ${isParent?'parent-bar':''} ${overdue?'overdue':''}"
                style="left:${barX+2}px; width:${barW}px; top:${isParent?5:3}px; height:${ROW_H_S-(isParent?10:6)}px;"
                title="${escapeAttr(tip)}">
@@ -955,7 +963,7 @@ function buildGanttTimelineHtml(opts){
         <div class="g-label" style="padding-left:${8+depth*14}px; width:${LABEL_W_S}px;">
           ${statusDotHtml(t.status)}
           ${milestone?'<span class="milestone-mark">◆</span>':''}
-          <span class="g-name-txt">${escapeHtml(t.name)}</span>
+          <span class="g-name-txt">${escapeHtml(displayName(t))}</span>
           <span class="pct-tag">${t.percentComplete}%</span>
         </div>
         <div class="g-timeline" style="width:${timelineW}px; height:${ROW_H_S}px;">
@@ -1275,7 +1283,7 @@ const STATUS_TITLES = { green: 'On track', amber: 'At risk', red: 'Off track', n
 function normalizeTask(t){
   return {
     id: t.id || uid(),
-    name: t.name || 'Untitled task',
+    name: (t.name !== undefined && t.name !== null) ? t.name : 'Untitled task',
     description: t.description || '',
     notes: t.notes || '',
     resources: Array.isArray(t.resources) ? t.resources : (t.resources? String(t.resources).split(',').map(s=>s.trim()).filter(Boolean) : []),
@@ -1339,6 +1347,9 @@ function hasChildren(id){ return state.tasks.some(t=>t.parentId===id); }
  *  marker instead of a bar. Duration 0 is the trigger; resources being empty is the typical case
  *  for a milestone but isn't required (e.g. "Alice signs off" can still name an owner). */
 function isMilestone(t){ return t && t.duration === 0; }
+/** For read-only display contexts only (Gantt, Dashboard, tooltips, dependency pickers) — the
+ *  editable Name input itself just shows the raw (possibly empty) value with a placeholder hint. */
+function displayName(t){ return (t && t.name) ? t.name : 'Untitled task'; }
 
 /** Builds the small colored status dot markup, shared by every screen that shows it. */
 function statusDotHtml(status, opts){
@@ -1519,7 +1530,7 @@ function recalcAll(){
    ========================================================================= */
 function addTask(afterId, asChildOf){
   const t = normalizeTask({
-    name: 'New task',
+    name: '',
     start: todayISO(),
     duration: 1,
     parentId: asChildOf || (afterId ? byId(afterId)?.parentId : null)
@@ -1684,7 +1695,7 @@ function renderTaskTable(){
     tdName.innerHTML = `<div class="name-wrap" style="padding-left:${depth*16}px;">
         ${twisty}
         ${milestoneMark}
-        <input class="cell-input name-input" data-field="name" value="${escapeAttr(t.name)}">
+        <input class="cell-input name-input" data-field="name" placeholder="New task" value="${escapeAttr(t.name)}">
       </div>`;
     tr.appendChild(tdName);
 
@@ -1717,7 +1728,7 @@ function renderTaskTable(){
     const tdPct = document.createElement('td');
     const rowIsMilestone = !hasChildren(t.id) && isMilestone(t);
     if(rowIsMilestone){
-      tdPct.innerHTML = `<label class="lock-toggle milestone-done-toggle"><input type="checkbox" class="cell-input" data-field="milestoneDone" ${t.percentComplete>=100?'checked':''}> Done</label>`;
+      tdPct.innerHTML = `<div class="milestone-done-stack"><input type="checkbox" class="cell-input" data-field="milestoneDone" ${t.percentComplete>=100?'checked':''}><span class="stack-label">Done</span></div>`;
     } else {
       tdPct.innerHTML = `<div class="pct-cell">
         <input type="number" min="0" max="100" step="5" class="cell-input pct-input" data-field="percentComplete" value="${t.percentComplete}" ${hasChildren(t.id)?'disabled':''}>
@@ -1771,7 +1782,7 @@ function escapeAttr(s){
 
 function buildNotesTooltipHtml(t){
   if(!t.description && !t.notes) return null;
-  let html = `<div class="tt-title">${escapeHtml(t.name)}</div>`;
+  let html = `<div class="tt-title">${escapeHtml(displayName(t))}</div>`;
   if(t.description) html += `<div class="tt-label">Description</div><div class="tt-section">${escapeHtml(t.description)}</div>`;
   if(t.notes) html += `<div class="tt-label">Notes</div><div class="tt-section">${escapeHtml(t.notes)}</div>`;
   return html;
@@ -1791,13 +1802,13 @@ function buildDepsTooltipHtml(t){
   for(const pid of t.predecessors){
     const p = byId(pid);
     if(!p) continue;
-    html += `<div class="tt-row"><b>${escapeHtml(p.name)}</b><span class="tt-date">${fmtDate(p.start)} → ${fmtDate(p.end)}</span></div>`;
+    html += `<div class="tt-row"><b>${escapeHtml(displayName(p))}</b><span class="tt-date">${fmtDate(p.start)} → ${fmtDate(p.end)}</span></div>`;
   }
   return html;
 }
 
 function buildGanttTooltipHtml(t){
-  let html = `<div class="tt-title">${statusDotHtml(t.status)} ${escapeHtml(t.name)}</div>`;
+  let html = `<div class="tt-title">${statusDotHtml(t.status)} ${escapeHtml(displayName(t))}</div>`;
   if(isMilestone(t)){
     html += `<div class="tt-meta">◆ Milestone · ${fmtDate(t.start)} · ${t.percentComplete}% complete</div>`;
   } else {
@@ -1837,6 +1848,28 @@ document.getElementById('task-tbody').addEventListener('click', (e)=>{
   else if(act==='delete') deleteTask(id);
   else if(act==='deps') openDepsPopover(btn, id);
   else if(act==='notes') openNotesModal(id);
+});
+
+let copiedDateValue = null;
+document.getElementById('task-tbody').addEventListener('keydown', (e)=>{
+  const isDateInput = e.target.matches && e.target.matches('input[type="date"]');
+  if(!isDateInput) return;
+  const key = e.key.toLowerCase();
+  if((e.ctrlKey||e.metaKey) && key==='c'){
+    if(e.target.value){
+      copiedDateValue = e.target.value;
+      if(navigator.clipboard) navigator.clipboard.writeText(copiedDateValue).catch(()=>{});
+      e.target.classList.add('date-copied-flash');
+      setTimeout(()=>e.target.classList.remove('date-copied-flash'), 350);
+    }
+  } else if((e.ctrlKey||e.metaKey) && key==='v'){
+    if(e.target.disabled || !copiedDateValue) return;
+    e.preventDefault();
+    e.target.value = copiedDateValue;
+    e.target.dispatchEvent(new Event('change', {bubbles:true}));
+    e.target.classList.add('date-copied-flash');
+    setTimeout(()=>e.target.classList.remove('date-copied-flash'), 350);
+  }
 });
 
 document.getElementById('task-tbody').addEventListener('input', (e)=>{
@@ -1922,13 +1955,25 @@ function openDepsPopover(anchorBtn, taskId){
   const rowsHtml = options.length ? options.map(id=>{
     const ot = byId(id);
     const checked = (t.predecessors||[]).includes(id);
-    return `<label class="pop-row"><input type="checkbox" value="${id}" ${checked?'checked':''}> <span class="dep-name">${escapeAttr(ot.name)}</span><span class="dep-date">${fmtDate(ot.end)}</span></label>`;
+    const indent = depthOf(id) * 14;
+    return `<label class="pop-row" data-filter-text="${escapeAttr(displayName(ot).toLowerCase())}"><input type="checkbox" value="${id}" ${checked?'checked':''}> <span class="dep-name" style="padding-left:${indent}px;">${escapeHtml(displayName(ot))}</span><span class="dep-date">${fmtDate(ot.end)}</span></label>`;
   }).join('') : `<div class="pop-empty">No other tasks available yet.</div>`;
 
   root.innerHTML = `<div class="popover" style="top:${rect.bottom+window.scrollY+4}px; left:${Math.min(rect.left+window.scrollX, window.innerWidth-260)}px;">
       <h4>Depends on (finish → start)</h4>
-      ${rowsHtml}
+      ${options.length>4?'<input type="text" class="popover-filter" placeholder="Filter tasks...">':''}
+      <div class="popover-rows">${rowsHtml}</div>
     </div>`;
+  const filterInput = root.querySelector('.popover-filter');
+  if(filterInput){
+    filterInput.addEventListener('input', ()=>{
+      const q = filterInput.value.trim().toLowerCase();
+      root.querySelectorAll('.pop-row').forEach(row=>{
+        row.style.display = !q || row.dataset.filterText.includes(q) ? '' : 'none';
+      });
+    });
+    filterInput.addEventListener('click', e=>e.stopPropagation());
+  }
   root.querySelectorAll('input[type=checkbox]').forEach(cb=>{
     cb.addEventListener('change', ()=>{
       const sel = Array.from(root.querySelectorAll('input[type=checkbox]:checked')).map(x=>x.value);
@@ -1957,7 +2002,7 @@ function openNotesModal(taskId){
   const root = document.getElementById('modal-root');
   root.innerHTML = `<div class="modal-backdrop">
     <div class="modal">
-      <div class="modal-head"><h3>${escapeAttr(t.name)}</h3><button data-act="close">&times;</button></div>
+      <div class="modal-head"><h3>${escapeHtml(displayName(t))}</h3><button data-act="close">&times;</button></div>
       <div class="modal-body">
         <div class="field"><label>Description</label><textarea id="mn-desc">${escapeHtml(t.description)}</textarea></div>
         <div class="field"><label>Notes</label><textarea id="mn-notes">${escapeHtml(t.notes)}</textarea></div>
@@ -1995,7 +2040,8 @@ function openTaskEditModal(taskId){
   const depsRows = eligible.length ? eligible.map(id=>{
     const ot = byId(id);
     const checked = (t.predecessors||[]).includes(id);
-    return `<label class="pop-row"><input type="checkbox" class="te-dep" value="${id}" ${checked?'checked':''}> <span class="dep-name">${escapeHtml(ot.name)}</span><span class="dep-date">${fmtDate(ot.end)}</span></label>`;
+    const indent = depthOf(id) * 14;
+    return `<label class="pop-row" data-filter-text="${escapeAttr(displayName(ot).toLowerCase())}"><input type="checkbox" class="te-dep" value="${id}" ${checked?'checked':''}> <span class="dep-name" style="padding-left:${indent}px;">${escapeHtml(displayName(ot))}</span><span class="dep-date">${fmtDate(ot.end)}</span></label>`;
   }).join('') : `<div class="pop-empty">No other tasks available.</div>`;
 
   /** Builds the % Complete field (or the milestone "Complete" toggle, or a disabled/derived display
@@ -2052,7 +2098,7 @@ function openTaskEditModal(taskId){
       <div class="modal-head"><h3>Edit Task</h3><button data-act="close">&times;</button></div>
       <div class="modal-body">
         ${isParent?'<div class="hint" style="background:var(--canvas); padding:8px 10px; border-radius:6px; margin:-4px 0 2px;">This is a summary task — start, end, duration, % complete, and resources are combined from its subtasks and can\'t be set directly here.</div>':''}
-        <div class="field"><label>Name</label><input type="text" id="te-name" value="${escapeAttr(t.name)}"></div>
+        <div class="field"><label>Name</label><input type="text" id="te-name" placeholder="New task" value="${escapeAttr(t.name)}"></div>
 
         <div style="display:flex; gap:12px;">
           <div class="field" style="flex:1;">
@@ -2076,7 +2122,8 @@ function openTaskEditModal(taskId){
 
         <div class="field">
           <label>Depends on</label>
-          <div style="max-height:130px; overflow:auto; border:1px solid var(--line-strong); border-radius:6px; padding:8px;">${depsRows}</div>
+          ${eligible.length>4?'<input type="text" class="modal-dep-filter" id="te-dep-filter" placeholder="Filter tasks..." style="width:100%; box-sizing:border-box; padding:6px 9px; margin-bottom:6px; border:1px solid var(--line-strong); border-radius:6px; font-size:12.5px;">':''}
+          <div style="max-height:130px; overflow:auto; border:1px solid var(--line-strong); border-radius:6px; padding:8px;" id="te-dep-rows">${depsRows}</div>
         </div>
 
         <div class="field"><label>Description</label><textarea id="te-desc">${escapeHtml(t.description)}</textarea></div>
@@ -2106,6 +2153,16 @@ function openTaskEditModal(taskId){
     if(startHint) startHint.style.display = anyChecked ? 'block' : 'none';
   }
   root.querySelectorAll('.te-dep').forEach(cb=>cb.addEventListener('change', refreshStartLock));
+
+  const depFilterInput = document.getElementById('te-dep-filter');
+  if(depFilterInput){
+    depFilterInput.addEventListener('input', ()=>{
+      const q = depFilterInput.value.trim().toLowerCase();
+      document.getElementById('te-dep-rows').querySelectorAll('.pop-row').forEach(row=>{
+        row.style.display = !q || row.dataset.filterText.includes(q) ? '' : 'none';
+      });
+    });
+  }
 
   // --- reactive: Duration crossing to/from 0 immediately swaps in the milestone-style % / Resources UI ---
   function computeMilestoneNow(){
@@ -2202,7 +2259,7 @@ function openTaskEditModal(taskId){
         t.resources = resEl.value.split(',').map(s=>s.trim()).filter(Boolean);
       }
       // belt-and-braces: a milestone never keeps resources, regardless of what the (disabled) field showed
-      if(!isParent && t.duration === 0) t.resources = [];
+      if(isMilestone(t) && !isParent) t.resources = [];
     }
     t.predecessors = Array.from(root.querySelectorAll('.te-dep:checked')).map(cb=>cb.value);
     t.status = sanitizeStatus(document.getElementById('te-status').value);
@@ -2288,16 +2345,17 @@ function renderGantt(){
     const barW = Math.max(dayWidth-2, (daysBetween(parseISO(t.start),parseISO(t.end))+1)*dayWidth - 4);
     const timelineInner = milestone
       ? `<div class="g-milestone ${overdue?'overdue':''} ${t.percentComplete>=100?'done':''}" style="left:${barX+dayWidth/2}px; top:${ROW_H/2}px;"></div>
-         <div class="g-milestone-label" style="left:${barX+dayWidth/2+11}px; top:${ROW_H/2}px;">${dayWidth>=10?escapeHtml(t.name):''}</div>`
+         <div class="g-milestone-label" style="left:${barX+dayWidth/2+11}px; top:${ROW_H/2}px;">${dayWidth>=10?escapeHtml(displayName(t)):''}</div>`
       : `<div class="g-bar ${isParent?'parent-bar':''} ${overdue?'overdue':''}" style="left:${barX+2}px; width:${barW}px;">
             <div class="fill" style="width:${t.percentComplete}%;"></div>
             <div class="lbl">${dayWidth>=14?escapeHtml((t.resources||[]).join(', ')):''}</div>
           </div>`;
     bodyRows += `<div class="g-row ${isParent?'is-parent':''}" data-id="${t.id}">
         <div class="g-label" style="padding-left:${8+depth*14}px;">
+          ${isParent?`<button class="twisty g-twisty" data-act="toggle" data-id="${t.id}">${t.collapsed?'▶':'▼'}</button>`:'<span class="twisty"></span>'}
           ${statusDotHtml(t.status)}
           ${milestone?'<span class="milestone-mark" title="Milestone">◆</span>':''}
-          <span class="g-name-txt">${escapeHtml(t.name)}</span>
+          <span class="g-name-txt">${escapeHtml(displayName(t))}</span>
           <button class="g-info-btn" tabindex="-1" aria-label="Task details">ⓘ</button>
           <span class="pct-tag">${t.percentComplete}%</span>
         </div>
@@ -2447,7 +2505,7 @@ function taskItemHtml(t){
   const milestone = isMilestone(t);
   const dateText = milestone ? fmtDate(t.start) : `${fmtDate(t.start)} → ${fmtDate(t.end)}`;
   return `<div class="dash-item ${milestone?'is-milestone':''}" data-task-id="${t.id}" title="Double-click to edit">
-      <div class="t-name">${statusDotHtml(t.status)} ${milestone?'<span class="milestone-mark" title="Milestone">◆</span> ':''}${escapeHtml(t.name)}</div>
+      <div class="t-name">${statusDotHtml(t.status)} ${milestone?'<span class="milestone-mark" title="Milestone">◆</span> ':''}${escapeHtml(displayName(t))}</div>
       <div class="t-meta">${dateText} · ${(t.resources||[]).join(', ')||'unassigned'}</div>
       ${milestone?'':`<div class="t-bar"><i style="width:${t.percentComplete}%"></i></div>`}
     </div>`;
@@ -2471,7 +2529,7 @@ function openResourceFilterPopover(anchorBtn){
 
   root.innerHTML = `<div class="popover" style="top:${rect.bottom+window.scrollY+4}px; left:${Math.min(rect.left+window.scrollX, window.innerWidth-260)}px;">
       <h4>Filter by resource</h4>
-      ${rowsHtml}
+      <div class="popover-rows">${rowsHtml}</div>
       ${resources.length?`<div style="display:flex; gap:6px; margin-top:8px; padding-top:8px; border-top:1px solid var(--line);">
         <button class="sm-btn" id="res-filter-all" style="flex:1;">Select all</button>
         <button class="sm-btn" id="res-filter-none" style="flex:1;">Clear</button>
@@ -2514,7 +2572,15 @@ document.getElementById('dash-content').addEventListener('dblclick', (e)=>{
   if(!item) return;
   openTaskEditModal(item.dataset.taskId);
 });
+document.getElementById('gantt-scroll').addEventListener('click', (e)=>{
+  const twisty = e.target.closest('.g-twisty');
+  if(!twisty) return;
+  e.stopPropagation();
+  const t = byId(twisty.dataset.id);
+  if(t){ t.collapsed = !t.collapsed; renderAll(); }
+});
 document.getElementById('gantt-scroll').addEventListener('dblclick', (e)=>{
+  if(e.target.closest('.g-twisty')) return; // toggling collapse shouldn't also open the editor
   const row = e.target.closest('.g-row');
   if(!row) return;
   openTaskEditModal(row.dataset.id);
@@ -2563,7 +2629,7 @@ function renderDashboard(){
     }
     if(!activeFilter){
       // virtual "person" for tasks nobody's been assigned to yet — only makes sense in the unfiltered view
-      const unassigned = state.tasks.filter(t=>!hasChildren(t.id) && (!t.resources||!t.resources.length) && classifyTask(t)!=='completed');
+      const unassigned = state.tasks.filter(t=>!hasChildren(t.id) && !isMilestone(t) && (!t.resources||!t.resources.length) && classifyTask(t)!=='completed');
       unassigned.sort((a,b)=>(a.end||'').localeCompare(b.end||''));
       html += `<div class="dash-card"><h3>Unassigned<span class="count">${unassigned.length}</span></h3>
         <div class="dash-list">${unassigned.length?unassigned.map(taskItemHtml).join(''):`<div class="dash-empty">No unassigned tasks.</div>`}</div></div>`;

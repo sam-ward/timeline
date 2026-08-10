@@ -1,7 +1,7 @@
 # Architecture & Developer Guide
 
 This document is for anyone (human or AI) who needs to read, modify, or extend the code in
-`timeline-schedule-tool.html`. It assumes no prior context; read this first before touching the
+`timeline-schedule-tool.html`. It assumes no prior context — read this first before touching the
 code.
 
 ## The big picture
@@ -9,19 +9,19 @@ code.
 The whole application is **one HTML file**: a `<style>` block, a `<body>` with all the markup, and a
 `<script>` block with every line of JavaScript. There is no build step, no bundler, no package.json,
 no external script or stylesheet tags, and no framework. This is a deliberate constraint, not an
-oversight. See [Why a single file?](#why-a-single-file) below. Any change you make should preserve
+oversight — see [Why a single file?](#why-a-single-file) below. Any change you make should preserve
 this: don't introduce a build step or an external dependency.
 
 There is no automated test suite bundled *inside the HTML file itself* (that would add a runtime
-dependency, which defeats the point). There is, however, an example test harness in `tests/`; see
+dependency, which defeats the point). There is, however, an example test harness in `tests/` — see
 `tests/README.md`. It's dev-only tooling, not something the app loads or depends on, but it's the same
 approach used throughout this app's own development to verify changes without a real browser
 (`jsdom-functional-tests.js`, for scheduling/data-model logic) and with one
-(`playwright-visual-tests.js`, for rendering and print output, since jsdom can't apply `@media print` or do
+(`playwright-visual-tests.js`, for rendering and print output — jsdom can't apply `@media print` or do
 real layout, so it can't catch everything). If you're extending this file, running both before and
 after your change is the recommended way to verify you haven't broken anything.
 
-### File layout (line numbers approximate; search for the section header comments)
+### File layout (line numbers approximate — search for the section header comments)
 
 ```
 <style>                     All CSS. Organized by area: layout/topbar, task table, popovers,
@@ -90,9 +90,10 @@ state = {
   end: "2026-08-10",           // ISO date, normally derived from start+duration
   manualEnd: false,            // if true, `end` is user-set and duration is derived instead
   percentComplete: 60,         // 0-100
+  status: "green",             // "green" | "amber" | "red" | null — see Status below
   predecessors: ["t9x8y7z"],   // array of task ids this task depends on (finish-to-start)
   parentId: null,              // task id, or null for a top-level task
-  collapsed: false             // Task List UI state — whether children are hidden
+  collapsed: false             // Task List / Gantt UI state — whether children are hidden
 }
 ```
 
@@ -101,7 +102,35 @@ from `parentId`. There is no nested-children array anywhere. See `flattenVisible
 `collectAllFlattened()` (export/print), and `childrenOf()` / `rootTasks()` for how the tree gets
 walked.
 
-### Milestones: a convention, not a separate type
+### Status (RAG)
+
+A task's `status` is `"green"`, `"amber"`, `"red"`, or `null` ("not set") — a simple manual
+red/amber/green indicator, independent of everything else on the task. `sanitizeStatus(raw)` is the
+single validator (anything else collapses to `null`), and `nextStatus(current)` implements the
+Task List's click-to-cycle order (`null → green → amber → red → null`). `statusDotHtml(status, opts)`
+is the one shared function that renders the colored dot everywhere it appears — Task List, Gantt
+(both the live view and the export/print renderer), Dashboard cards, and the Gantt hover tooltip —
+pass `opts.clickable` and `opts.taskId` for the Task List's interactive version.
+
+The colors are **not** new custom colors — they intentionally reuse `--accent` (green), `--warn`
+(amber), and `--danger` (red), the same variables already used elsewhere (today-marker, overdue
+rows). This was a deliberate choice to avoid introducing a fourth color meaning into the palette and
+to get dark-mode support for free, at the cost of `--warn`/`--danger` now carrying two slightly
+different meanings depending on context (there wasn't a Task List/Gantt case in testing where this
+read as confusing, but it's worth knowing if you're ever asked to give Status its own distinct hues).
+
+Status is edited via a `<select>` dropdown in the task edit modal (`#te-status`), styled with the
+current color as a small dot overlaid on the closed control — see `.status-select-wrap` in the CSS.
+**Gotcha if you touch this again:** the milestone completion toggle used to be labeled "Status" in
+that same modal (a checkbox for "is this milestone done") — it was renamed to **"Progress"** when the
+Status field was added, specifically to avoid two same-named fields sitting in the same form. If you
+ever see "Status" and a checkbox together in the modal, that's the bug this avoided.
+
+Status is deliberately **not** locked for parent/summary tasks or for milestones — unlike almost every
+other field, a manager might reasonably want to flag a whole phase, or a milestone itself, as at-risk,
+so `rollupLocked` and `isMilestone(t)` are never checked before reading/writing `t.status`.
+
+### Milestones — a convention, not a separate type
 
 A task **is** a milestone if `duration === 0`. There's no `isMilestoneFlag` boolean field; this was a
 deliberate simplification, since duration and milestone-ness are inherently linked (a milestone is a
@@ -114,18 +143,21 @@ function isMilestone(t){ return t && t.duration === 0; }
 Two invariants are enforced defensively at the top of every `recalcAll()` pass (see
 `clearMilestoneResources()`): a milestone always has `resources: []`, and (via `addWorkingDays`) its
 `end` always equals its `start`. Parent/summary tasks are *never* treated as milestones for rendering
-purposes even if their rolled-up span happens to be zero days; see the `!isParent &&` guards
-wherever `isMilestone()` is checked in the render code.
+purposes even if their rolled-up span happens to be zero days — see the `!isParent &&` guards
+wherever `isMilestone()` is checked in the render code. The Dashboard's virtual "Unassigned" bucket
+also explicitly excludes milestones (`!isMilestone(t)`) — a milestone can never have resources by
+definition, so listing it there would read as "forgot to assign someone" rather than what it actually
+is.
 
 ### Parent (summary) tasks
 
 Any task that has at least one other task pointing `parentId` at it becomes a summary row. Its own
 `start`, `end`, `duration`, `percentComplete`, and `resources` fields get **overwritten** every
 `recalcAll()` pass by a rollup of its children (min start, max end, duration-weighted average
-percent, union of resources). The UI disables editing these fields directly on a parent row; see
+percent, union of resources). The UI disables editing these fields directly on a parent row — see
 `hasChildren(t.id)` checks throughout `renderTaskTable()` and `openTaskEditModal()`.
 
-## The scheduling engine: `recalcAll()`
+## The scheduling engine — `recalcAll()`
 
 This is the most important function in the codebase. Everything that changes a task's data calls
 `recalcAll()` before re-rendering. It does two things, in a loop:
@@ -133,57 +165,103 @@ This is the most important function in the codebase. Everything that changes a t
 1. **Normalize.** Three defensive passes run once at the very start of every call, each fixing up
    data that could have drifted into an invalid state (from direct edits, or from loading an older
    file):
-   - `stripCircularPredecessors()`: a task can never depend on one of its own ancestors (that would
-     make the ancestor's rollup depend on the task's own schedule, which depends on the ancestor,
-     causing an infinite feedback loop). See the [circular-dependency note](#why-cant-a-task-depend-on-its-own-ancestor)
+   - `stripCircularPredecessors()` — a task can never depend on one of its own ancestors (that would
+     make the ancestor's rollup depend on the task's own schedule, which depends on the ancestor —
+     infinite feedback loop). See the [circular-dependency note](#why-cant-a-task-depend-on-its-own-ancestor)
      below for why this exists.
-   - `canonicalizeResourceCasing()`: resource names are matched case-insensitively ("Joe" and "joe"
+   - `canonicalizeResourceCasing()` — resource names are matched case-insensitively ("Joe" and "joe"
      are the same person). Whichever casing appeared first wins, with a slight preference for a
      capitalized version.
-   - `clearMilestoneResources()`: any milestone's `resources` array gets forced to `[]`.
+   - `clearMilestoneResources()` — any milestone's `resources` array gets forced to `[]`.
 
-2. **Iterate to a fixed point** (capped at 12 passes; real schedules converge in 1-3):
+2. **Iterate to a fixed point** (capped at 12 passes — real schedules converge in 1-3):
    - For every **leaf** task (no children): compute `start` from its predecessors' latest `end` (+1
      working day) if it has any, else leave `start` as-is; then compute `end` from `start + duration`
-     via `addWorkingDays()`, or, if `manualEnd` is set, derive `duration` from the `start`/`end`
+     via `addWorkingDays()`, or — if `manualEnd` is set — derive `duration` from the `start`/`end`
      range instead via `countWorkingDays()`.
    - For every **parent** task (deepest first): roll up `start`/`end`/`percentComplete`/`resources`
      from its children.
    - Repeat until nothing changed in a full pass.
 
 This relaxation approach (rather than a strict topological sort) was chosen because it naturally
-handles the relationship between predecessor chains and parent rollups without needing to reason about a
-combined dependency graph: a leaf's predecessor might be a parent task, whose own date depends on
+handles the interplay between predecessor chains and parent rollups without needing to reason about a
+combined dependency graph — a leaf's predecessor might be a parent task, whose own date depends on
 *its* children, which might depend on tasks in another branch entirely. Iterating to a fixed point
 handles all of that uniformly, at the cost of (bounded, cheap) repeated passes.
 
 ### Working-day math
 
-- `isWorkingDay(date)`: false for weekends or any date in `state.holidays`.
-- `addWorkingDays(startISO, duration)`: the core "how do I compute an end date" function. Special
-  case: `duration === 0` returns the (normalized) start date unchanged, which is what makes a milestone
+- `isWorkingDay(date)` — false for weekends or any date in `state.holidays`.
+- `addWorkingDays(startISO, duration)` — the core "how do I compute an end date" function. Special
+  case: `duration === 0` returns the (normalized) start date unchanged — that's what makes a milestone
   a single point rather than a one-day bar.
-- `countWorkingDays(startISO, endISO)`: the reverse: given a date range, how many working days does
+- `countWorkingDays(startISO, endISO)` — the reverse: given a date range, how many working days does
   it span. Used when `manualEnd` is set.
-- `sanitizeDuration(raw)`: parses a duration value, allowing an explicit `0` (unlike a naive
+- `sanitizeDuration(raw)` — parses a duration value, allowing an explicit `0` (unlike a naive
   `Number(x) || 1` pattern, which would silently treat `0` as falsy and reset it to `1`). An empty or
-  missing value falls back to `1`, not `0`, since clearing a field shouldn't accidentally create a
+  missing value falls back to `1`, not `0` — clearing a field shouldn't accidentally create a
   milestone.
 
 ### Why can't a task depend on its own ancestor?
 
-If a task depends on one of its own parents (directly or transitively), you get a circular
+If a task depends on one of its own parents (directly or transitively), you get a genuine circular
 calculation: the parent's `end` is computed as the max of its children's `end` dates (rollup), but the
 child's `start` is computed as "the day after its predecessor (the parent) finishes." Each
 `recalcAll()` pass would push both dates further into the future, forever. This was an actual bug
-found during development (see git history / conversation log if available); `eligiblePredecessorIds()`
+found during development (see git history / conversation log if available) — `eligiblePredecessorIds()`
 now excludes a task's own ancestors from the dependency picker UI, and `stripCircularPredecessors()`
 cleans up any such link defensively (e.g. if a sibling task is indented to become a child of a task it
 already depended on).
 
+## Theming
+
+The whole app is styled through CSS custom properties defined once in `:root` (`--paper`, `--canvas`,
+`--accent`, `--text`, etc. — see the top of the `<style>` block). This is what makes dark mode
+tractable: most rules reference a variable, not a literal color, so redefining the variable block is
+enough to re-theme most of the UI. A handful of colors used to be hardcoded hex values instead —
+mostly Gantt-chart-specific ones (bar fill/border, weekend shading, summary-row background) that were
+tuned by eye against a light background — those were pulled out into their own variables
+(`--bar-bg`, `--weekend-bg`, `--summary-bg`, etc.) specifically so dark mode could give them real,
+separately-tuned values rather than just inverting a filter over the whole page.
+
+There are three theme states — **Light**, **Dark**, **System** — cycled by the 🌓 button
+(`#btn-theme`) and persisted in `localStorage` under the key `timeline-theme-preference`.
+Implementation:
+
+- **Light** and **Dark** set `data-theme="light"` / `data-theme="dark"` on `<html>`, which a
+  `:root[data-theme="dark"]` CSS rule matches to override the variable block.
+- **System** removes the `data-theme` attribute entirely, letting a
+  `@media (prefers-color-scheme: dark)` rule take over — scoped as
+  `:root:not([data-theme="light"])` so it only applies when the user hasn't explicitly forced Light.
+- `applyTheme()` in the `THEME` section of the script is the single function that flips the attribute
+  and updates the toggle button's icon/label; `getStoredTheme()` reads the saved preference (falling
+  back to `'system'`, including if `localStorage` throws, e.g. in private browsing).
+- `color-scheme` (the actual CSS property, not a custom one) is set alongside the color variables in
+  both the light and dark blocks, so native form controls — the date picker, scrollbars — follow the
+  theme too, not just the app's own elements.
+
+**Two deliberate exceptions**, both by design decision rather than oversight:
+
+- **Printing is always light.** The print popup (`printGanttChart()`, see above) has always had its
+  own small, hand-written, self-contained stylesheet, independent of the main page — so this came for
+  free. It's not a coincidence: keep it that way if you touch print again.
+- **The static HTML export bakes in whichever theme was active at export time**, rather than
+  reacting to the theme of whoever later opens the exported file. `currentThemeVarsCss()` resolves
+  every theme variable to its current fixed value via `getComputedStyle()` and appends a `:root{}`
+  block after the copied stylesheet in `exportStaticHTML()`, overriding the conditional
+  light/dark/media-query logic with fixed values. If you add a new theme-aware variable, add its name
+  to the `names` array in `currentThemeVarsCss()` too, or it won't get baked into exports.
+
+If you add a new UI element with its own color: reference an existing variable if one fits, or add a
+new one to *all three* places it needs to be defined — the light `:root` block, the
+`@media (prefers-color-scheme: dark)` block, and the `:root[data-theme="dark"]` block (the latter two
+are currently kept as literal duplicates of each other, not shared via any preprocessor, since there
+isn't one) — and, if it's Gantt-related, the print popup's own separate `printCss` `:root` block too
+(with a fixed light value, since print never changes).
+
 ## Rendering
 
-There is no virtual DOM and no diffing; every render function builds an HTML string and sets
+There is no virtual DOM and no diffing — every render function builds an HTML string and sets
 `.innerHTML` on a container. Three views, three top-level render functions, all invoked together by
 `renderAll()`:
 
@@ -195,25 +273,25 @@ There is no virtual DOM and no diffing; every render function builds an HTML str
 
 Early versions of this app called `renderAll()` on every keystroke in a text/number field. Since
 `renderTaskTable()` fully replaces the table's DOM, this **stole focus after the first character
-typed**, a real bug that came up during development. The fix, and the pattern to follow for any new
+typed** — a real bug that came up during development. The fix, and the pattern to follow for any new
 editable field: text/number/date fields commit their value on the `change` event (fires on blur), not
 `input`. The `input` listener on `#task-tbody` only updates state directly for fields where a full
-re-render isn't needed (`name`, which updates Gantt/Dashboard titles live without touching the table) or
+re-render isn't needed (`name` — updates Gantt/Dashboard titles live without touching the table) or
 gives a cheap visual-only preview (the % progress bar fill, updated live via direct style
 manipulation without touching state or re-rendering). See the two listeners on `#task-tbody` in the
 `RENDER: TASK TABLE` section for the exact split.
 
-Checkboxes (manual-end toggle, the milestone Done checkbox) don't have this problem: there's no
-"typing" to interrupt, so they commit on `change` immediately, same as before.
+Checkboxes (manual-end toggle, the milestone Done checkbox) don't have this problem — there's no
+"typing" to interrupt — so they commit on `change` immediately, same as before.
 
 ### Two Gantt renderers, one shared geometry function
 
-There are two independent Gantt renderers, and here's why:
+There are two independent Gantt renderers, and it's worth understanding why:
 
-- **`renderGantt()`** → the interactive, on-screen view. Sized for the current zoom level, stretches
+- **`renderGantt()`** — the interactive, on-screen view. Sized for the current zoom level, stretches
   to fill the visible viewport width, wires up hover tooltips, double-click-to-edit, and dependency
   arrows via inline event bindings.
-- **`buildGanttTimelineHtml(opts)`** → a parameterized, DOM-independent version returning `{html,
+- **`buildGanttTimelineHtml(opts)`** — a parameterized, DOM-independent version returning `{html,
   width, height}` given explicit `dayWidth`/`rowHeight`/`labelWidth`. This is reused by:
   - `buildStaticGanttHtml()` for the "Export HTML" static snapshot (fixed compact sizing, wrapped in
     a scrollable box).
@@ -221,48 +299,104 @@ There are two independent Gantt renderers, and here's why:
     `computePrintGanttParams()` to fit the chosen date range onto a printed page rather than printing
     whatever zoom level the user happened to be scrolled to.
 
+Both renderers respect `collapsed` via `flattenVisible()` — a parent task's children simply aren't in
+the list returned to the renderer. The interactive Gantt (`renderGantt()`) has its own toggle button
+(`.g-twisty`, delegated via a `click` listener on `#gantt-scroll` that's careful to `stopPropagation()`
+and to bail out of the row's `dblclick`-to-edit handler when the click was on the twisty) — it just
+flips `t.collapsed` and calls `renderAll()`, identical to the Task List's own toggle. Export and print
+deliberately ignore `collapsed` (see `collectAllFlattened()`, ignore-collapse-by-design) — a printed
+or exported document should always show everything regardless of what happened to be folded away on
+screen at that moment.
+
+### Task names: editable value vs. display fallback
+
+A task's `name` can legitimately be an empty string — new tasks start that way (`addTask()`), so the
+Task List and edit modal name inputs show `placeholder="New task"` as a hint rather than pre-filling
+literal text you'd have to delete. `normalizeTask()` only substitutes the `"Untitled task"` fallback
+for a truly missing name (`undefined`/`null`, e.g. a malformed loaded file) — an empty string is
+treated as a deliberate, valid value and preserved as-is.
+
+Every **read-only** place a name is shown — Gantt labels, Dashboard cards, tooltips, dependency
+pickers, the notes-modal header — goes through `displayName(t)` instead of `t.name` directly, so a
+blank task still shows as "Untitled task" there rather than an empty label. If you add a new place
+that displays a task's name, use `displayName()`, not `t.name`; if you add a new *editable* name
+field, bind it to the raw `t.name` (with a placeholder) the same way the two existing ones do.
+
+### Dependency pickers: depth indication and filtering
+
+There are two separate places a user picks dependencies — the Task List's Deps-chip popover
+(`openDepsPopover()`) and the edit modal's "Depends on" checklist (built inline in
+`openTaskEditModal()`) — and they share the same `.pop-row` / `.dep-name` / `.dep-date` markup and
+CSS, so a change to one visual convention usually needs to be applied to both call sites by hand
+(there's no shared row-builder function between them, just shared CSS classes).
+
+Both now indent each option by `depthOf(id) * 14px` on the `.dep-name` span, so a task's position in
+the hierarchy is visible at a glance — this was added because a flat alphabetical-ish list made it
+hard to tell parent tasks from their own children. Both also render a filter `<input>` above the
+option list once there are more than 4 candidates (`options.length > 4`), matched against a
+lowercased `data-filter-text` attribute already baked into each row at render time (rather than
+re-reading `textContent` on every keystroke) — see the `.popover-filter` / `.modal-dep-filter` input
+listeners for the (identical, duplicated) filtering logic in each location. The popover version
+rebuilds its entire DOM (and loses the filter text) every time a checkbox is toggled, since
+`openDepsPopover()` calls itself again to refresh — this is a pre-existing, deliberate simplicity
+trade-off, not an oversight.
+
+### Copy/paste for date fields
+
+`<input type="date">` doesn't support reliable cross-browser copy/paste on its own (locale-formatted
+display text vs. the underlying ISO value make native paste inconsistent). Rather than depend on the
+system clipboard at all — which also needs a permission prompt and doesn't work well from a
+`file://`-opened page — dates use a simple **in-memory** "clipboard": a single module-level
+`copiedDateValue` variable. A `keydown` listener on `#task-tbody`, scoped to `input[type="date"]`
+targets only, intercepts Ctrl/Cmd+C to store `e.target.value` (already the ISO `YYYY-MM-DD` string,
+regardless of the browser's display locale) and Ctrl/Cmd+V to write it into whichever date field is
+focused and dispatch a synthetic `change` event so the normal blur-commit handling picks it up. It
+also best-effort mirrors the value to `navigator.clipboard` for cross-app pasting, but that's a bonus,
+not the mechanism the feature actually depends on — the in-memory variable is what makes "copy once,
+paste into several rows in a row" reliable for bulk schedule entry.
+
 If you change how bars, milestones, or dependency arrows are drawn, you likely need to update **both**
-`renderGantt()` and `buildGanttTimelineHtml()`: they intentionally share the same visual language
+`renderGantt()` and `buildGanttTimelineHtml()` — they intentionally share the same visual language
 (CSS class names) but are separate implementations, since the interactive view has concerns (hover
 tooltips, live DOM event binding, viewport-fill-on-resize) that the static one doesn't.
 
 ### Printing the Gantt chart: why a separate popup window
 
-Task List and Dashboard printing works the conventional way: an in-page `@media print` stylesheet
+Task List and Dashboard printing works the conventional way — an in-page `@media print` stylesheet
 toggles which `.view` is visible. The Gantt chart does **not** use this approach; `printGanttChart()`
 instead opens a new browser window with a small, self-contained, purpose-built stylesheet and writes
 the print-sized chart into it directly.
 
-This was arrived at after a long debugging process (read this before you're tempted to "simplify" it
+This was arrived at after a long debugging process (worth knowing if you're tempted to "simplify" it
 back): the interactive Gantt view uses `position: sticky` extensively (for on-screen scroll-pinned row
 labels and headers), and browsers are well known to handle `position: sticky` unpredictably during
-print pagination; in testing, this produced garbled, overlapping output specifically in the print
+print pagination — in testing, this produced garbled, overlapping output specifically in the print
 pass, even though the same content looked fine on screen. Isolating the print content in its own
 minimal document, with zero sticky positioning, was what actually fixed it. A second, unrelated bug
 was found and fixed at the same time: browsers don't print background colors by default, which made
-progress bars, milestone fills, and weekend/today shading disappear, fixed via
+progress bars, milestone fills, and weekend/today shading disappear — fixed via
 `print-color-adjust: exact` in both the popup's stylesheet and the main page's print media query (so
 Task List/Dashboard printing, which uses backgrounds too, doesn't hit the same issue).
 
 If you need to touch Gantt printing again: `computePrintGanttParams()` decides the sizing (clamped
 day-column width so the date range fits one landscape page where possible), and the popup's `<style>`
 block in `printGanttChart()` is deliberately hand-written and minimal rather than reusing the main
-page's stylesheet; keep it that way.
+page's stylesheet — keep it that way.
 
 ### Dashboard
 
 `classifyTask(t)` buckets a task into `overdue` / `current` / `upcoming` / `completed` / `null`
-(parents return `null`; only leaf tasks are units of work). `taskItemHtml(t)` is the single
+(parents return `null` — only leaf tasks are actionable work items). `taskItemHtml(t)` is the single
 shared card-renderer used everywhere a task appears on the dashboard (the three status buckets, the
-per-person breakdown, and the Unassigned card); if you're changing how a task card looks, this is the
+per-person breakdown, and the Unassigned card) — if you're changing how a task card looks, this is the
 one place to do it. The **Unassigned** card in the "By person" section is a virtual pseudo-person built
 inline in `renderDashboard()` (filtering for tasks with an empty `resources` array) rather than a real
-entry in `allResources()`; it only appears when no resource filter is active, since it wouldn't mean
+entry in `allResources()` — it only appears when no resource filter is active, since it wouldn't mean
 anything filtered to a specific person.
 
 ## The task edit modal (`openTaskEditModal`)
 
-This is the most stateful piece of UI in the app: a form-style dialog (as opposed to the Task List's
+This is the most stateful piece of UI in the app — a form-style dialog (as opposed to the Task List's
 inline row editing) used from the Dashboard and Gantt views. A few things worth knowing if you modify
 it:
 
@@ -277,10 +411,10 @@ it:
 - **Unsaved-changes detection** is done by snapshotting all form field values into a JSON string on
   open (`teSnapshot()`), and comparing again on any close attempt (`teAttemptClose()`). If they differ,
   it confirms before discarding. This is why `readPct()`/`readResources()` exist as small indirection
-  functions: the underlying control for % complete swaps between a number input and a checkbox
+  functions — the underlying control for % complete swaps between a number input and a checkbox
   depending on milestone state, and the snapshot needs to read whichever is currently present.
 - **Escape closes the modal** the same way Cancel does (calls the same `teAttemptClose()`), via a
-  `keydown` listener added to `document` on open and explicitly removed on close (`teClose()`); don't
+  `keydown` listener added to `document` on open and explicitly removed on close (`teClose()`) — don't
   forget the `removeEventListener` if you add another exit path, or you'll leak a listener per modal
   open.
 
@@ -291,11 +425,11 @@ it:
 - With FS API support: `doSave()` writes directly to a previously-chosen `fileHandle` (no dialog) once
   one exists; the first save, or **Save As**, always opens the native save picker.
 - Without it: `downloadJSON(promptForName)` triggers a browser download. `lastDownloadName` is
-  remembered so plain **Save** can silently reuse the same filename, while **Save As** always prompts.
-  This distinction was added deliberately (see conversation history) after the two buttons were
+  remembered so plain **Save** can silently reuse the same filename, while **Save As** always prompts
+  — this distinction was added deliberately (see conversation history) after the two buttons were
   found to behave identically in fallback mode.
 - `loadFromText(text)` parses and validates a JSON file, runs every task through `normalizeTask()`
-  (which fills in defaults for any missing/malformed field, important for forward-compatibility if
+  (which fills in defaults for any missing/malformed field — important for forward-compatibility if
   you add new fields later), then calls `recalcAll()` to self-heal anything that's drifted out of a
   valid state (circular deps, resource casing, stale milestone resources) before rendering.
 
@@ -310,9 +444,18 @@ it:
 4. If it affects scheduling (dates, duration, dependencies), touch `recalcAll()`.
 5. If it should show up in tooltips, the Gantt chart, or the Dashboard, check
    `buildGanttTooltipHtml()`, `buildGanttTimelineHtml()`, and `taskItemHtml()`.
+6. If it needs a static/print export column too, check `buildStaticTaskListHtml()` and (for the
+   print-column-hiding rule) the `nth-child` selectors in the `@media print` block — they hide the
+   reorder-controls, Notes, and Actions columns *by position*, so inserting a new Task List column
+   shifts those indices and needs updating too (this bit the Status column when it was added).
+
+The Status field (`status` / `sanitizeStatus()` / `statusDotHtml()`, documented above) went through
+exactly this checklist and is a reasonable template to copy if you're adding something similar — a
+small, independently-set attribute that needs to show up consistently across all four views plus
+export.
 
 **Adding a new view/tab:**
-Follow the existing `.view` pattern: a `<section class="view" id="view-yourname">`, a tab button with
+Follow the existing `.view` pattern — a `<section class="view" id="view-yourname">`, a tab button with
 `data-tab="yourname"`, and register it in `switchTab()`. Print support requires adding your view's id
 to the `.view.printing` toggle logic in the Print button handler if you want in-page printing (see the
 Gantt exception above if your view has scrolling/sticky content that might need the popup-window
@@ -320,9 +463,9 @@ treatment instead).
 
 **Adding a new export format:**
 `buildStaticTaskListHtml()`, `buildStaticGanttHtml()`, and `buildStaticDashboardHtml()` are the
-existing building blocks for `exportStaticHTML()`: each returns a self-contained HTML string with no
+existing building blocks for `exportStaticHTML()` — each returns a self-contained HTML string with no
 JS and no editable elements. A Mermaid-diagram export was attempted and removed (the output quality
-wasn't good enough); if revisiting that idea, note that Mermaid's `gantt` diagrams don't support
+wasn't good enough) — if revisiting that idea, note that Mermaid's `gantt` diagrams don't support
 multi-level task nesting, partial-percent progress, or resource swimlanes, so it needs real
 simplification decisions, not a direct translation.
 
@@ -332,13 +475,13 @@ This was a deliberate design constraint from the outset: "minimal / no dependenc
 install," runnable by double-clicking it. That constraint shapes several decisions that might look
 unusual coming from a typical web app codebase:
 
-- No package manager, no `node_modules`, no build step: the file you edit is the file that runs.
-- No framework (React, Vue, etc.): all rendering is manual `innerHTML` string-building.
-- No CSS framework: all styles are hand-written, using CSS custom properties for the design tokens
+- No package manager, no `node_modules`, no build step — the file you edit is the file that runs.
+- No framework (React, Vue, etc.) — all rendering is manual `innerHTML` string-building.
+- No CSS framework — all styles are hand-written, using CSS custom properties for the design tokens
   (colors, fonts) defined once in `:root`.
 - Persistence is a local file, not a server or database.
 
 If you're extending this and are tempted to reach for a bundler or a UI library: that would change the
 fundamental value proposition (open the file, it just works), so think carefully before doing so. If
-the file is outgrowing this approach, that's a valid reason to restructure; just make it a
+the file is genuinely outgrowing this approach, that's a valid reason to restructure — just make it a
 deliberate decision, not an incidental one.
