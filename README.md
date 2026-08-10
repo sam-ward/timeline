@@ -8,6 +8,13 @@ you like.
 
 ![Welcome screen](screenshots/01-welcome.png)
 
+## Disclaimer
+This project was 100% vibe coded using Claude Code. I make no secret of this. But I needed a tool and
+didnt have time to code it myself.  I was also a bit of an experiment for me in guiding a coding agent.
+
+If you wish to use it then by all means please do.  And if you dont like AI generated applications or don't 
+trust their output, then that is fine too. For me it met a need and I am ok with what it is.
+
 ## Why this exists
 
 Most project-scheduling tools are either heavyweight SaaS products with logins and subscriptions, or

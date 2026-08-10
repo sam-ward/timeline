@@ -1,19 +1,5 @@
 <!DOCTYPE html>
 <html lang="en">
-<!-- Copyright 2026 Sam Ward
-
-Licensed under the Apache License, Version 2.0 (the "License");
-you may not use this file except in compliance with the License.
-You may obtain a copy of the License at
-
-    https://www.apache.org/licenses/LICENSE-2.0
-
-Unless required by applicable law or agreed to in writing, software
-distributed under the License is distributed on an "AS IS" BASIS,
-WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-See the License for the specific language governing permissions and
-limitations under the License.
-  -->
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -35,10 +21,83 @@ limitations under the License.
   --text-mute:#6B7280;
   --danger:#B3412D;
   --danger-light:#F7E2DD;
+  /* gantt & chrome colors that used to be hardcoded hex values — kept as variables so a theme
+     only needs to override them once, here, rather than hunting through every rule */
+  --header-bg:#F6F7F8;
+  --summary-bg:#F3F5F6;
+  --weekend-bg:#EFF1F3;
+  --bar-bg:#CFE0DB;
+  --bar-border:#AFC7BF;
+  --bar-label-color:#173028;
+  --bar-label-shadow:rgba(255,255,255,.4);
+  --parent-bar-bg:#D9DEE3;
+  --parent-bar-fill:#5B6A7C;
+  --row-hover-bg:#FAFBFB;
+  --row-parent-hover-bg:#EEF1F2;
+  color-scheme: light;
+
   --font-ui: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
   --font-mono: ui-monospace, "SF Mono", "Cascadia Mono", "Consolas", monospace;
   --row-h: 34px;
   --day-w: 26px;
+}
+/* Dark palette — applied when the OS prefers dark and the user hasn't explicitly chosen "Light",
+   or when the user has explicitly chosen "Dark" regardless of the OS setting. */
+@media (prefers-color-scheme: dark){
+  :root:not([data-theme="light"]){
+    --paper:#1E242C;
+    --canvas:#14181D;
+    --accent:#4FA98A;
+    --accent-dark:#6FC0A3;
+    --accent-light:#1F3630;
+    --warn:#E08A4F;
+    --warn-light:#3A2A1C;
+    --line:#2C333C;
+    --line-strong:#3D4650;
+    --text:#E4E7EB;
+    --text-mute:#8992A0;
+    --danger:#E0705A;
+    --danger-light:#3A211C;
+    --header-bg:#20262D;
+    --summary-bg:#242B32;
+    --weekend-bg:#1A1F25;
+    --bar-bg:#24413A;
+    --bar-border:#3A5C50;
+    --bar-label-color:#DCEEE7;
+    --bar-label-shadow:rgba(0,0,0,.4);
+    --parent-bar-bg:#333B45;
+    --parent-bar-fill:#8792A0;
+    --row-hover-bg:#242A31;
+    --row-parent-hover-bg:#2A323A;
+    color-scheme: dark;
+  }
+}
+:root[data-theme="dark"]{
+  --paper:#1E242C;
+  --canvas:#14181D;
+  --accent:#4FA98A;
+  --accent-dark:#6FC0A3;
+  --accent-light:#1F3630;
+  --warn:#E08A4F;
+  --warn-light:#3A2A1C;
+  --line:#2C333C;
+  --line-strong:#3D4650;
+  --text:#E4E7EB;
+  --text-mute:#8992A0;
+  --danger:#E0705A;
+  --danger-light:#3A211C;
+  --header-bg:#20262D;
+  --summary-bg:#242B32;
+  --weekend-bg:#1A1F25;
+  --bar-bg:#24413A;
+  --bar-border:#3A5C50;
+  --bar-label-color:#DCEEE7;
+  --bar-label-shadow:rgba(0,0,0,.4);
+  --parent-bar-bg:#333B45;
+  --parent-bar-fill:#8792A0;
+  --row-hover-bg:#242A31;
+  --row-parent-hover-bg:#2A323A;
+  color-scheme: dark;
 }
 *{box-sizing:border-box;}
 html,body{height:100%;}
@@ -193,7 +252,7 @@ table#task-table{
 }
 #task-table thead th{
   position:sticky; top:41px; z-index:4;
-  background:#F6F7F8;
+  background:var(--header-bg);
   border-bottom:1px solid var(--line-strong);
   border-right:1px solid var(--line);
   padding:7px 8px;
@@ -211,20 +270,36 @@ table#task-table{
   vertical-align:middle;
   white-space:nowrap;
 }
-#task-table tr.task-row:hover td{background:#FAFBFB;}
-#task-table tr.is-parent td{background:#F3F5F6; font-weight:600;}
-#task-table tr.is-parent:hover td{background:#EEF1F2;}
+#task-table tr.task-row:hover td{background:var(--row-hover-bg);}
+#task-table tr.is-parent td{background:var(--summary-bg); font-weight:600;}
+#task-table tr.is-parent:hover td{background:var(--row-parent-hover-bg);}
 #task-table tr.is-overdue td.col-name{box-shadow:inset 3px 0 0 var(--danger);}
 .cell-input{
   border:1px solid transparent; background:transparent; border-radius:4px;
   padding:4px 5px; width:100%; min-width:60px;
 }
 .cell-input:hover{border-color:var(--line-strong);}
-.cell-input:focus{border-color:var(--accent); outline:none; background:#fff;}
+.cell-input:focus{border-color:var(--accent); outline:none; background:var(--paper);}
 .cell-input:disabled{color:var(--text-mute); background:transparent; border-color:transparent;}
 .col-name{min-width:220px;}
 .name-wrap{display:flex; align-items:center; gap:4px;}
 .milestone-mark{color:var(--accent); font-size:11px; flex:none;}
+.status-dot{
+  display:inline-block; width:11px; height:11px; border-radius:50%; vertical-align:middle;
+  border:1.5px solid transparent; box-sizing:border-box; flex:none;
+}
+.status-dot.status-none{background:transparent; border-color:var(--line-strong);}
+.status-dot.status-green{background:var(--accent); border-color:var(--accent);}
+.status-dot.status-amber{background:var(--warn); border-color:var(--warn);}
+.status-dot.status-red{background:var(--danger); border-color:var(--danger);}
+.status-dot.clickable{cursor:pointer;}
+.status-cell{text-align:center;}
+.status-select-wrap{position:relative; display:flex; align-items:center;}
+.status-select-wrap .status-dot{position:absolute; left:11px; pointer-events:none;}
+.status-select{
+  width:100%; padding:8px 10px 8px 30px; border:1px solid var(--line-strong); border-radius:6px;
+  background:var(--paper); color:var(--text); font-family:inherit; font-size:12.5px;
+}
 .indent-spacer{flex:none;}
 .twisty{
   flex:none; width:14px; height:14px; border:none; background:transparent;
@@ -278,7 +353,7 @@ input.res-input{width:100%; min-width:100px; overflow:hidden; text-overflow:elli
 
 /* ---------- Popover ---------- */
 .popover{
-  position:absolute; z-index:100; background:#fff; border:1px solid var(--line-strong);
+  position:absolute; z-index:100; background:var(--paper); border:1px solid var(--line-strong);
   border-radius:8px; box-shadow:0 8px 24px rgba(20,25,35,.18); padding:10px; min-width:220px; max-height:260px; overflow:auto;
 }
 .popover h4{margin:0 0 6px; font-size:11px; text-transform:uppercase; color:var(--text-mute); letter-spacing:.4px;}
@@ -293,7 +368,7 @@ input.res-input{width:100%; min-width:100px; overflow:hidden; text-overflow:elli
   position:fixed; inset:0; background:rgba(20,25,32,.45); display:flex; align-items:center; justify-content:center; z-index:200;
 }
 .modal{
-  background:#fff; border-radius:10px; width:480px; max-width:92vw; max-height:86vh; overflow:auto;
+  background:var(--paper); border-radius:10px; width:480px; max-width:92vw; max-height:86vh; overflow:auto;
   box-shadow:0 20px 60px rgba(0,0,0,.3);
 }
 .modal-head{display:flex; align-items:center; padding:14px 18px; border-bottom:1px solid var(--line);}
@@ -318,19 +393,19 @@ input.res-input{width:100%; min-width:100px; overflow:hidden; text-overflow:elli
   display:flex; align-items:center; gap:10px; padding:8px 14px; background:var(--paper); border-bottom:1px solid var(--line); flex:none;
 }
 .zoom-group{display:flex; align-items:center; gap:2px; margin-left:6px;}
-.zoom-group button{width:24px; height:24px; border:1px solid var(--line-strong); background:#fff; border-radius:4px;}
+.zoom-group button{width:24px; height:24px; border:1px solid var(--line-strong); background:var(--paper); border-radius:4px;}
 .legend{display:flex; gap:14px; margin-left:auto; font-size:11px; color:var(--text-mute); align-items:center;}
 .legend .sw{display:inline-block; width:10px; height:10px; border-radius:2px; margin-right:4px; vertical-align:-1px;}
 #gantt-scroll{flex:1; min-height:0; overflow:auto; position:relative; background:var(--paper);}
 #gantt-content{position:relative;}
 .g-row{display:flex; height:var(--row-h); border-bottom:1px solid var(--line); cursor:pointer;}
 .g-label{
-  position:sticky; left:0; z-index:3; width:260px; flex:none; background:#fff;
+  position:sticky; left:0; z-index:3; width:260px; flex:none; background:var(--paper);
   display:flex; align-items:center; gap:5px; padding:0 8px; border-right:1px solid var(--line-strong);
   font-size:12px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;
 }
-.g-row.is-parent .g-label{font-weight:700; background:#F3F5F6;}
-.g-row.is-parent{background:#F9FAFA;}
+.g-row.is-parent .g-label{font-weight:700; background:var(--summary-bg);}
+.g-row.is-parent{background:var(--summary-bg);}
 .g-label .pct-tag{margin-left:auto; font-family:var(--font-mono); font-size:10.5px; color:var(--text-mute); flex:none;}
 .g-name-txt{overflow:hidden; text-overflow:ellipsis; white-space:nowrap; min-width:0;}
 .g-info-btn{
@@ -340,8 +415,8 @@ input.res-input{width:100%; min-width:100px; overflow:hidden; text-overflow:elli
 .g-row:hover .g-info-btn{opacity:1;}
 .g-info-btn:hover{color:var(--accent);}
 .g-bar{cursor:default;}
-.g-head{display:flex; position:sticky; top:0; z-index:6; background:#F6F7F8; border-bottom:1px solid var(--line-strong);}
-.g-head .g-label{position:sticky; top:0; left:0; z-index:7; background:#F6F7F8; font-size:11px; text-transform:uppercase; letter-spacing:.4px; color:var(--text-mute); font-weight:700;}
+.g-head{display:flex; position:sticky; top:0; z-index:6; background:var(--header-bg); border-bottom:1px solid var(--line-strong);}
+.g-head .g-label{position:sticky; top:0; left:0; z-index:7; background:var(--header-bg); font-size:11px; text-transform:uppercase; letter-spacing:.4px; color:var(--text-mute); font-weight:700;}
 .g-head-days{position:relative;}
 .g-month-row{display:flex; height:20px; border-bottom:1px solid var(--line);}
 .g-month-cell{
@@ -353,23 +428,23 @@ input.res-input{width:100%; min-width:100px; overflow:hidden; text-overflow:elli
   border-right:1px solid var(--line); font-size:9.5px; color:var(--text-mute); text-align:center; flex:none;
   font-family:var(--font-mono); display:flex; align-items:center; justify-content:center;
 }
-.g-day-cell.weekend{background:#EFF1F3;}
+.g-day-cell.weekend{background:var(--weekend-bg);}
 .g-day-cell.holiday{background:var(--warn-light); color:var(--warn);}
 .g-timeline{position:relative; flex:none;}
-.g-bg-cell{position:absolute; top:0; bottom:0; border-right:1px solid #F0F1F3;}
-.g-bg-cell.weekend{background:#F4F5F7;}
+.g-bg-cell{position:absolute; top:0; bottom:0; border-right:1px solid var(--line);}
+.g-bg-cell.weekend{background:var(--weekend-bg);}
 .g-bg-cell.holiday{background:var(--warn-light);}
 .g-bar{
   position:absolute; top:6px; height:calc(var(--row-h) - 12px); border-radius:4px;
-  background:#CFE0DB; border:1px solid #AFC7BF; overflow:hidden; box-shadow:0 1px 2px rgba(0,0,0,.06);
+  background:var(--bar-bg); border:1px solid var(--bar-border); overflow:hidden; box-shadow:0 1px 2px rgba(0,0,0,.06);
 }
 .g-bar .fill{position:absolute; left:0; top:0; bottom:0; background:var(--accent);}
 .g-bar .lbl{
   position:absolute; left:6px; top:0; bottom:0; display:flex; align-items:center;
-  font-size:10.5px; color:#173028; white-space:nowrap; z-index:2; font-weight:600; text-shadow:0 1px 0 rgba(255,255,255,.4);
+  font-size:10.5px; color:var(--bar-label-color); white-space:nowrap; z-index:2; font-weight:600; text-shadow:0 1px 0 var(--bar-label-shadow);
 }
-.g-bar.parent-bar{background:#D9DEE3; border-color:var(--line-strong); border-radius:2px; top:10px; height:calc(var(--row-h) - 20px);}
-.g-bar.parent-bar .fill{background:#5B6A7C;}
+.g-bar.parent-bar{background:var(--parent-bar-bg); border-color:var(--line-strong); border-radius:2px; top:10px; height:calc(var(--row-h) - 20px);}
+.g-bar.parent-bar .fill{background:var(--parent-bar-fill);}
 .g-bar.overdue{border-color:var(--danger);}
 .g-milestone{
   position:absolute; width:13px; height:13px; transform:translate(-50%,-50%) rotate(45deg);
@@ -431,8 +506,8 @@ input.res-input{width:100%; min-width:100px; overflow:hidden; text-overflow:elli
   *{-webkit-print-color-adjust:exact !important; print-color-adjust:exact !important; color-adjust:exact !important;}
   /* Task List print: drop columns that are only useful for interactive editing */
   #task-table th:nth-child(1), #task-table td:nth-child(1),
-  #task-table th:nth-child(9), #task-table td:nth-child(9),
-  #task-table th:nth-child(10), #task-table td:nth-child(10){
+  #task-table th:nth-child(10), #task-table td:nth-child(10),
+  #task-table th:nth-child(11), #task-table td:nth-child(11){
     display:none !important;
   }
   .lock-toggle{display:none !important;}
@@ -457,6 +532,7 @@ input.res-input{width:100%; min-width:100px; overflow:hidden; text-overflow:elli
       <button class="tbtn" id="btn-holidays" disabled>Holidays</button>
       <button class="tbtn" id="btn-export" disabled>Export HTML</button>
       <button class="tbtn primary" id="btn-print" disabled>Print / PDF</button>
+      <button class="tbtn" id="btn-theme" title="Theme: System">🌓</button>
     </div>
     <input type="file" id="file-input" accept="application/json,.json">
   </header>
@@ -489,6 +565,7 @@ input.res-input{width:100%; min-width:100px; overflow:hidden; text-overflow:elli
             <tr>
               <th style="width:56px;"></th>
               <th class="col-name">Task</th>
+              <th style="width:64px;">Status</th>
               <th>Start</th>
               <th>Dur (d)</th>
               <th>End</th>
@@ -515,7 +592,7 @@ input.res-input{width:100%; min-width:100px; overflow:hidden; text-overflow:elli
         <button class="sm-btn" id="btn-today">Today</button>
         <div class="legend">
           <span><i class="sw" style="background:var(--accent);"></i>Progress</span>
-          <span><i class="sw" style="background:#EFF1F3;"></i>Weekend</span>
+          <span><i class="sw" style="background:var(--weekend-bg);"></i>Weekend</span>
           <span><i class="sw" style="background:var(--warn-light);"></i>Holiday</span>
           <span><i class="sw" style="background:var(--warn);"></i>Today</span>
         </div>
@@ -797,7 +874,7 @@ function buildStaticTaskListHtml(){
   if(!rows.length) return '<p class="hint">No tasks.</p>';
   const today = todayISO();
   let html = `<table id="task-table" style="width:100%;"><thead><tr>
-      <th class="col-name">Task</th><th>Start</th><th>End</th><th>Dur (d)</th><th>% Done</th><th>Resources</th><th>Notes</th>
+      <th class="col-name">Task</th><th style="width:64px;">Status</th><th>Start</th><th>End</th><th>Dur (d)</th><th>% Done</th><th>Resources</th><th>Notes</th>
     </tr></thead><tbody>`;
   for(const {task:t, depth} of rows){
     const isParent = hasChildren(t.id);
@@ -805,6 +882,7 @@ function buildStaticTaskListHtml(){
     const notesText = [t.description, t.notes].filter(Boolean).join(' — ');
     html += `<tr class="task-row ${isParent?'is-parent':''} ${overdue?'is-overdue':''}">
         <td class="col-name"><div class="name-wrap" style="padding-left:${depth*16}px;"><span>${escapeHtml(t.name)}</span></div></td>
+        <td class="status-cell">${statusDotHtml(t.status)}</td>
         <td>${fmtDate(t.start)}</td>
         <td>${fmtDate(t.end)}</td>
         <td style="text-align:right;">${t.duration}</td>
@@ -871,10 +949,11 @@ function buildGanttTimelineHtml(opts){
                style="left:${barX+2}px; width:${barW}px; top:${isParent?5:3}px; height:${ROW_H_S-(isParent?10:6)}px;"
                title="${escapeAttr(tip)}">
             <div class="fill" style="width:${t.percentComplete}%;"></div>
-            ${barLabel?`<div class="lbl" style="position:absolute; left:5px; top:0; bottom:0; display:flex; align-items:center; font-size:${Math.max(8,ROW_H_S*0.32)}px; white-space:nowrap; z-index:2; color:#173028;">${barLabel}</div>`:''}
+            ${barLabel?`<div class="lbl" style="position:absolute; left:5px; top:0; bottom:0; display:flex; align-items:center; font-size:${Math.max(8,ROW_H_S*0.32)}px; white-space:nowrap; z-index:2; color:var(--bar-label-color);">${barLabel}</div>`:''}
           </div>`;
     bodyRows += `<div class="g-row ${isParent?'is-parent':''}" style="height:${ROW_H_S}px;">
         <div class="g-label" style="padding-left:${8+depth*14}px; width:${LABEL_W_S}px;">
+          ${statusDotHtml(t.status)}
           ${milestone?'<span class="milestone-mark">◆</span>':''}
           <span class="g-name-txt">${escapeHtml(t.name)}</span>
           <span class="pct-tag">${t.percentComplete}%</span>
@@ -979,6 +1058,9 @@ function printGanttChart(){
     :root{
       --paper:#FFFFFF; --accent:#2F6F5E; --warn:#C7622A; --warn-light:#FBE7DA;
       --line:#DDE1E6; --line-strong:#C6CBD2; --text:#23272E; --text-mute:#6B7280;
+      --header-bg:#F6F7F8; --summary-bg:#F3F5F6; --weekend-bg:#EFF1F3;
+      --bar-bg:#CFE0DB; --bar-border:#AFC7BF; --bar-label-color:#173028; --bar-label-shadow:rgba(255,255,255,.4);
+      --parent-bar-bg:#D9DEE3; --parent-bar-fill:#5B6A7C; --danger:#B3412D;
       --font-ui: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
       --font-mono: ui-monospace, "SF Mono", "Cascadia Mono", "Consolas", monospace;
     }
@@ -988,13 +1070,13 @@ function printGanttChart(){
     .print-header{margin-bottom:14px; font-family:var(--font-mono); font-size:14px; color:var(--text);}
     .print-header b{font-size:16px;}
     .g-row{display:flex; border-bottom:1px solid var(--line); position:static;}
-    .g-row.is-parent{background:#F9FAFA;}
+    .g-row.is-parent{background:var(--summary-bg);}
     .g-label{position:static; flex:none; background:#fff; display:flex; align-items:center; gap:5px; padding:0 8px;
       border-right:1px solid var(--line-strong); font-size:12px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;}
-    .g-row.is-parent .g-label{font-weight:700; background:#F3F5F6;}
+    .g-row.is-parent .g-label{font-weight:700; background:var(--summary-bg);}
     .g-label .pct-tag{margin-left:auto; font-family:var(--font-mono); font-size:10.5px; color:var(--text-mute); flex:none;}
     .g-name-txt{overflow:hidden; text-overflow:ellipsis; white-space:nowrap; min-width:0;}
-    .g-head{display:flex; position:static; background:#F6F7F8; border-bottom:1px solid var(--line-strong);}
+    .g-head{display:flex; position:static; background:var(--header-bg); border-bottom:1px solid var(--line-strong);}
     .g-head .g-label{position:static; font-size:11px; text-transform:uppercase; letter-spacing:.4px; color:var(--text-mute); font-weight:700;}
     .g-head-days{position:relative;}
     .g-month-row{display:flex; height:20px; border-bottom:1px solid var(--line);}
@@ -1003,23 +1085,29 @@ function printGanttChart(){
     .g-day-row{display:flex; height:20px;}
     .g-day-cell{border-right:1px solid var(--line); font-size:9.5px; color:var(--text-mute); text-align:center; flex:none;
       font-family:var(--font-mono); display:flex; align-items:center; justify-content:center;}
-    .g-day-cell.weekend{background:#EFF1F3;}
+    .g-day-cell.weekend{background:var(--weekend-bg);}
     .g-day-cell.holiday{background:var(--warn-light); color:var(--warn);}
     .g-timeline{position:relative; flex:none;}
-    .g-bg-cell{position:absolute; top:0; bottom:0; border-right:1px solid #F0F1F3;}
-    .g-bg-cell.weekend{background:#F4F5F7;}
+    .g-bg-cell{position:absolute; top:0; bottom:0; border-right:1px solid var(--line);}
+    .g-bg-cell.weekend{background:var(--weekend-bg);}
     .g-bg-cell.holiday{background:var(--warn-light);}
-    .g-bar{position:absolute; border-radius:4px; background:#CFE0DB; border:1px solid #AFC7BF; overflow:hidden;}
+    .g-bar{position:absolute; border-radius:4px; background:var(--bar-bg); border:1px solid var(--bar-border); overflow:hidden;}
     .g-bar .fill{position:absolute; left:0; top:0; bottom:0; background:var(--accent);}
-    .g-bar.parent-bar{background:#D9DEE3; border-color:var(--line-strong); border-radius:2px;}
-    .g-bar.parent-bar .fill{background:#5B6A7C;}
-    .g-bar.overdue{border-color:#B3412D;}
+    .g-bar .lbl{color:var(--bar-label-color);}
+    .g-bar.parent-bar{background:var(--parent-bar-bg); border-color:var(--line-strong); border-radius:2px;}
+    .g-bar.parent-bar .fill{background:var(--parent-bar-fill);}
+    .g-bar.overdue{border-color:var(--danger);}
     .g-milestone{position:absolute; width:13px; height:13px; transform:translate(-50%,-50%) rotate(45deg);
       background:#fff; border:2px solid var(--accent); border-radius:2px;}
     .g-milestone.done{background:var(--accent);}
-    .g-milestone.overdue{border-color:#B3412D;}
+    .g-milestone.overdue{border-color:var(--danger);}
     .g-milestone-label{position:absolute; transform:translateY(-50%); font-weight:600; color:var(--text); white-space:nowrap;}
     .milestone-mark{color:var(--accent); font-size:11px;}
+    .status-dot{display:inline-block; width:9px; height:9px; border-radius:50%; vertical-align:middle; border:1.5px solid transparent; box-sizing:border-box;}
+    .status-dot.status-none{background:transparent; border-color:var(--line-strong);}
+    .status-dot.status-green{background:var(--accent); border-color:var(--accent);}
+    .status-dot.status-amber{background:var(--warn); border-color:var(--warn);}
+    .status-dot.status-red{background:var(--danger); border-color:var(--danger);}
     .today-line{position:absolute; top:0; width:0; border-left:2px solid var(--warn);}
     .today-flag{position:absolute; top:-2px; transform:translateX(-50%); background:var(--warn); color:#fff; font-size:9px;
       font-weight:700; padding:2px 5px; border-radius:3px; white-space:nowrap; font-family:var(--font-mono);}
@@ -1068,6 +1156,25 @@ function buildStaticDashboardHtml(){
   return `<div class="dash-grid">${cardHtml('overdue','Overdue','⚠')}${cardHtml('current','In Progress','▶')}${cardHtml('upcoming','Upcoming','⏭')}</div>`;
 }
 
+/** Resolves the *currently active* theme's color variables to fixed values and returns them as a
+ *  CSS block. Used by the static export so the snapshot always shows the schedule the way it looked
+ *  at export time — it doesn't second-guess itself based on whoever later opens the file, or their
+ *  system's dark/light setting. */
+function currentThemeVarsCss(){
+  const names = [
+    '--ink','--ink-2','--paper','--canvas','--accent','--accent-dark','--accent-light',
+    '--warn','--warn-light','--line','--line-strong','--text','--text-mute','--danger','--danger-light',
+    '--header-bg','--summary-bg','--weekend-bg','--bar-bg','--bar-border','--bar-label-color',
+    '--bar-label-shadow','--parent-bar-bg','--parent-bar-fill','--row-hover-bg','--row-parent-hover-bg'
+  ];
+  const cs = getComputedStyle(document.documentElement);
+  let css = ':root{\n';
+  for(const n of names) css += `  ${n}: ${cs.getPropertyValue(n).trim()};\n`;
+  css += `  color-scheme: ${cs.getPropertyValue('color-scheme').trim() || 'light'};\n`;
+  css += '}\n';
+  return css;
+}
+
 function exportStaticHTML(){
   const styleText = document.querySelector('style').innerHTML;
   const generated = new Date().toLocaleString();
@@ -1079,6 +1186,8 @@ function exportStaticHTML(){
 <title>${escapeHtml(state.meta.name||'Schedule')} — Export</title>
 <style>
 ${styleText}
+/* the schedule's current theme, baked in as fixed values at export time — see currentThemeVarsCss() */
+${currentThemeVarsCss()}
 body{ padding:28px; overflow:auto; height:auto; }
 .export-header{ margin-bottom:20px; }
 .export-header h1{ font-family:var(--font-mono); font-size:20px; margin:0 0 4px; }
@@ -1150,6 +1259,19 @@ function loadFromText(text){
   openSchedule();
 }
 
+const VALID_STATUSES = ['green', 'amber', 'red'];
+/** Normalizes any input into a valid status value, or null for "not set". */
+function sanitizeStatus(raw){
+  return VALID_STATUSES.includes(raw) ? raw : null;
+}
+/** Blank -> Green -> Amber -> Red -> Blank, used by the Task List's click-to-cycle dot. */
+function nextStatus(current){
+  const order = [null, 'green', 'amber', 'red'];
+  const idx = order.indexOf(current);
+  return order[(idx + 1) % order.length];
+}
+const STATUS_TITLES = { green: 'On track', amber: 'At risk', red: 'Off track', null: 'Status not set' };
+
 function normalizeTask(t){
   return {
     id: t.id || uid(),
@@ -1162,6 +1284,7 @@ function normalizeTask(t){
     end: t.end || null,
     manualEnd: !!t.manualEnd,
     percentComplete: Math.min(100, Math.max(0, Number(t.percentComplete)||0)),
+    status: sanitizeStatus(t.status),
     predecessors: Array.isArray(t.predecessors) ? t.predecessors.slice() : [],
     parentId: t.parentId || null,
     collapsed: !!t.collapsed
@@ -1216,6 +1339,16 @@ function hasChildren(id){ return state.tasks.some(t=>t.parentId===id); }
  *  marker instead of a bar. Duration 0 is the trigger; resources being empty is the typical case
  *  for a milestone but isn't required (e.g. "Alice signs off" can still name an owner). */
 function isMilestone(t){ return t && t.duration === 0; }
+
+/** Builds the small colored status dot markup, shared by every screen that shows it. */
+function statusDotHtml(status, opts){
+  opts = opts || {};
+  const cls = status ? 'status-' + status : 'status-none';
+  const title = STATUS_TITLES[status] || STATUS_TITLES[null];
+  const clickable = opts.clickable ? ' clickable' : '';
+  const dataAttr = opts.taskId ? ` data-status-dot="${opts.taskId}"` : '';
+  return `<span class="status-dot ${cls}${clickable}" title="${escapeAttr(title + (opts.clickable ? ' — click to change' : ''))}"${dataAttr}></span>`;
+}
 function rootTasks(){ return state.tasks.filter(t=>!t.parentId); }
 function descendantIds(id){
   let out = [];
@@ -1555,6 +1688,12 @@ function renderTaskTable(){
       </div>`;
     tr.appendChild(tdName);
 
+    // --- status ---
+    const tdStatus = document.createElement('td');
+    tdStatus.className = 'status-cell';
+    tdStatus.innerHTML = statusDotHtml(t.status, {clickable:true, taskId:t.id});
+    tr.appendChild(tdStatus);
+
     // --- start ---
     const tdStart = document.createElement('td');
     const startLocked = !!(t.predecessors && t.predecessors.length) || hasChildren(t.id);
@@ -1658,7 +1797,7 @@ function buildDepsTooltipHtml(t){
 }
 
 function buildGanttTooltipHtml(t){
-  let html = `<div class="tt-title">${escapeHtml(t.name)}</div>`;
+  let html = `<div class="tt-title">${statusDotHtml(t.status)} ${escapeHtml(t.name)}</div>`;
   if(isMilestone(t)){
     html += `<div class="tt-meta">◆ Milestone · ${fmtDate(t.start)} · ${t.percentComplete}% complete</div>`;
   } else {
@@ -1673,6 +1812,17 @@ function buildGanttTooltipHtml(t){
 
 /* -- table event delegation -- */
 document.getElementById('task-tbody').addEventListener('click', (e)=>{
+  const dot = e.target.closest('[data-status-dot]');
+  if(dot){
+    const id = dot.dataset.statusDot;
+    const t = byId(id);
+    if(t){
+      t.status = nextStatus(t.status);
+      markDirty();
+      renderAll();
+    }
+    return;
+  }
   const btn = e.target.closest('button');
   if(!btn) return;
   const tr = e.target.closest('tr');
@@ -1848,41 +1998,52 @@ function openTaskEditModal(taskId){
     return `<label class="pop-row"><input type="checkbox" class="te-dep" value="${id}" ${checked?'checked':''}> <span class="dep-name">${escapeHtml(ot.name)}</span><span class="dep-date">${fmtDate(ot.end)}</span></label>`;
   }).join('') : `<div class="pop-empty">No other tasks available.</div>`;
 
-  /** Builds the % Complete / Resources block. Milestones get a simple Done checkbox instead of a
-   *  percentage, and their Resources field is disabled — a single point in time isn't "worked on".
-   *  Shared between the initial render and the live refresh when Duration changes. */
-  function pctResourcesBlockHtml(milestoneNow){
+  /** Builds the % Complete field (or the milestone "Complete" toggle, or a disabled/derived display
+   *  for summary tasks). Kept separate from Resources so Duration crossing 0 can swap just this piece
+   *  live without touching the Status field next to it. */
+  function pctFieldHtml(milestoneNow){
     if(rollupLocked){
-      return `
-        <div class="field" style="flex:1;">
+      return `<div class="field" style="flex:1;" id="te-pct-cell">
           <label>% Complete</label>
           <input type="number" min="0" max="100" step="5" id="te-pct" value="${t.percentComplete}" disabled>
-        </div>
-        <div class="field" style="flex:2;">
-          <label>Resources</label>
-          <input type="text" id="te-resources" placeholder="e.g. Alice, Bob" value="${escapeAttr((t.resources||[]).join(', '))}" disabled>
         </div>`;
     }
     if(milestoneNow){
-      return `
-        <div class="field" style="flex:1;">
-          <label>Status</label>
+      return `<div class="field" style="flex:1;" id="te-pct-cell">
+          <label>Progress</label>
           <label class="lock-toggle milestone-done-toggle" style="margin-top:9px;"><input type="checkbox" id="te-pct-done" ${t.percentComplete>=100?'checked':''}> Complete</label>
-        </div>
-        <div class="field" style="flex:2;">
-          <label>Resources</label>
-          <input type="text" id="te-resources" value="" disabled placeholder="Milestones don't have resources" title="Milestones don't have resources">
         </div>`;
     }
-    return `
-        <div class="field" style="flex:1;">
-          <label>% Complete</label>
-          <input type="number" min="0" max="100" step="5" id="te-pct" value="${t.percentComplete}">
+    return `<div class="field" style="flex:1;" id="te-pct-cell">
+        <label>% Complete</label>
+        <input type="number" min="0" max="100" step="5" id="te-pct" value="${t.percentComplete}">
+      </div>`;
+  }
+  /** The RAG Status dropdown. Independent of milestone/parent state — even a summary task or a
+   *  milestone can carry a manually-set status, so this never gets locked or swapped out. */
+  function statusFieldHtml(){
+    const val = t.status || '';
+    return `<div class="field" style="flex:1;">
+        <label>Status</label>
+        <div class="status-select-wrap">
+          ${statusDotHtml(t.status)}
+          <select class="status-select" id="te-status">
+            <option value="" ${!val?'selected':''}>None</option>
+            <option value="green" ${val==='green'?'selected':''}>Green</option>
+            <option value="amber" ${val==='amber'?'selected':''}>Amber</option>
+            <option value="red" ${val==='red'?'selected':''}>Red</option>
+          </select>
         </div>
-        <div class="field" style="flex:2;">
-          <label>Resources</label>
-          <input type="text" id="te-resources" placeholder="e.g. Alice, Bob" value="${escapeAttr((t.resources||[]).join(', '))}">
-        </div>`;
+      </div>`;
+  }
+  function resourcesFieldHtml(milestoneNow){
+    if(rollupLocked){
+      return `<div class="field"><label>Resources</label><input type="text" id="te-resources" placeholder="e.g. Alice, Bob" value="${escapeAttr((t.resources||[]).join(', '))}" disabled></div>`;
+    }
+    if(milestoneNow){
+      return `<div class="field"><label>Resources</label><input type="text" id="te-resources" value="" disabled placeholder="Milestones don't have resources" title="Milestones don't have resources"></div>`;
+    }
+    return `<div class="field"><label>Resources</label><input type="text" id="te-resources" placeholder="e.g. Alice, Bob" value="${escapeAttr((t.resources||[]).join(', '))}"></div>`;
   }
   const initialMilestone = !isParent && isMilestone(t);
 
@@ -1910,7 +2071,8 @@ function openTaskEditModal(taskId){
           </div>
         </div>
 
-        <div style="display:flex; gap:12px;" id="te-pct-resources-row">${pctResourcesBlockHtml(initialMilestone)}</div>
+        <div style="display:flex; gap:12px;" id="te-pct-status-row">${pctFieldHtml(initialMilestone)}${statusFieldHtml()}</div>
+        <div id="te-resources-wrap">${resourcesFieldHtml(initialMilestone)}</div>
 
         <div class="field">
           <label>Depends on</label>
@@ -1952,11 +2114,11 @@ function openTaskEditModal(taskId){
     return sanitizeDuration(durInput.value) === 0;
   }
   function refreshMilestoneUI(){
-    const row = document.getElementById('te-pct-resources-row');
     const wasMilestoneUI = !!document.getElementById('te-pct-done');
     const nowMilestone = computeMilestoneNow();
     if(wasMilestoneUI === nowMilestone) return; // no boundary crossed — don't clobber what's being typed
-    row.innerHTML = pctResourcesBlockHtml(nowMilestone);
+    document.getElementById('te-pct-cell').outerHTML = pctFieldHtml(nowMilestone);
+    document.getElementById('te-resources-wrap').innerHTML = resourcesFieldHtml(nowMilestone);
   }
   durInput.addEventListener('input', refreshMilestoneUI);
   if(manualEndCb){
@@ -1986,6 +2148,7 @@ function openTaskEditModal(taskId){
       end: endInput.value,
       manualEnd: manualEndCb ? manualEndCb.checked : null,
       pct: readPct(),
+      status: document.getElementById('te-status').value,
       resources: readResources(),
       deps: Array.from(root.querySelectorAll('.te-dep:checked')).map(cb=>cb.value).sort(),
       desc: document.getElementById('te-desc').value,
@@ -2042,6 +2205,7 @@ function openTaskEditModal(taskId){
       if(!isParent && t.duration === 0) t.resources = [];
     }
     t.predecessors = Array.from(root.querySelectorAll('.te-dep:checked')).map(cb=>cb.value);
+    t.status = sanitizeStatus(document.getElementById('te-status').value);
     t.description = document.getElementById('te-desc').value;
     t.notes = document.getElementById('te-notes').value;
 
@@ -2131,6 +2295,7 @@ function renderGantt(){
           </div>`;
     bodyRows += `<div class="g-row ${isParent?'is-parent':''}" data-id="${t.id}">
         <div class="g-label" style="padding-left:${8+depth*14}px;">
+          ${statusDotHtml(t.status)}
           ${milestone?'<span class="milestone-mark" title="Milestone">◆</span>':''}
           <span class="g-name-txt">${escapeHtml(t.name)}</span>
           <button class="g-info-btn" tabindex="-1" aria-label="Task details">ⓘ</button>
@@ -2282,7 +2447,7 @@ function taskItemHtml(t){
   const milestone = isMilestone(t);
   const dateText = milestone ? fmtDate(t.start) : `${fmtDate(t.start)} → ${fmtDate(t.end)}`;
   return `<div class="dash-item ${milestone?'is-milestone':''}" data-task-id="${t.id}" title="Double-click to edit">
-      <div class="t-name">${milestone?'<span class="milestone-mark" title="Milestone">◆</span> ':''}${escapeHtml(t.name)}</div>
+      <div class="t-name">${statusDotHtml(t.status)} ${milestone?'<span class="milestone-mark" title="Milestone">◆</span> ':''}${escapeHtml(t.name)}</div>
       <div class="t-meta">${dateText} · ${(t.resources||[]).join(', ')||'unassigned'}</div>
       ${milestone?'':`<div class="t-bar"><i style="width:${t.percentComplete}%"></i></div>`}
     </div>`;
@@ -2456,9 +2621,40 @@ window.addEventListener('resize', ()=>{
 });
 
 /* =========================================================================
+   THEME  (Light / Dark / System, persisted locally — this file runs
+   standalone in the user's own browser, so localStorage is safe to use here)
+   ========================================================================= */
+const THEME_KEY = 'timeline-theme-preference';
+const THEME_ORDER = ['system', 'light', 'dark'];
+const THEME_ICON = { system: '🌓', light: '☀️', dark: '🌙' };
+const THEME_LABEL = { system: 'System', light: 'Light', dark: 'Dark' };
+
+function getStoredTheme(){
+  try { return localStorage.getItem(THEME_KEY) || 'system'; }
+  catch(e){ return 'system'; }
+}
+function applyTheme(theme){
+  const root = document.documentElement;
+  if(theme === 'light' || theme === 'dark') root.setAttribute('data-theme', theme);
+  else root.removeAttribute('data-theme');
+  const btn = document.getElementById('btn-theme');
+  if(btn){
+    btn.textContent = THEME_ICON[theme] || THEME_ICON.system;
+    btn.title = 'Theme: ' + (THEME_LABEL[theme] || 'System') + ' (click to change)';
+  }
+}
+document.getElementById('btn-theme').addEventListener('click', ()=>{
+  const current = getStoredTheme();
+  const next = THEME_ORDER[(THEME_ORDER.indexOf(current) + 1) % THEME_ORDER.length];
+  try { localStorage.setItem(THEME_KEY, next); } catch(e){ /* private browsing etc. — theme just won't persist */ }
+  applyTheme(next);
+});
+
+/* =========================================================================
    INIT
    ========================================================================= */
 (function init(){
+  applyTheme(getStoredTheme());
   if(!canUseFS){
     document.getElementById('btn-save').title = 'Downloads a .json file (your browser doesn\'t support direct file saving)';
   }
