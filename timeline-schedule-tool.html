@@ -2082,7 +2082,7 @@ function openTaskEditModal(taskId){
     return `<div class="field" style="flex:1;">
         <label>Status</label>
         <div class="status-select-wrap">
-          ${statusDotHtml(t.status)}
+          <span id="te-status-dot">${statusDotHtml(t.status)}</span>
           <select class="status-select" id="te-status">
             <option value="" ${!val?'selected':''}>None</option>
             <option value="green" ${val==='green'?'selected':''}>Green</option>
@@ -2195,6 +2195,13 @@ function openTaskEditModal(taskId){
       refreshMilestoneUI();
     });
   }
+
+  // --- reactive: the Status dropdown's dot recolors immediately, not just after save + reopen ---
+  function refreshStatusUI(){
+    const dotWrap = document.getElementById('te-status-dot');
+    if(dotWrap) dotWrap.innerHTML = statusDotHtml(sanitizeStatus(document.getElementById('te-status').value));
+  }
+  document.getElementById('te-status').addEventListener('change', refreshStatusUI);
 
   function readPct(){
     const doneCb = document.getElementById('te-pct-done');
