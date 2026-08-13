@@ -15,6 +15,10 @@ spreadsheets that don't understand dependencies or working days. Timeline sits i
 core features you actually need for a small-to-medium project — a Gantt chart, task dependencies,
 working-day-aware scheduling, resource tracking, and a status dashboard — with zero setup.
 
+## A note on how this was built
+
+This project was built almost entirely with AI coding tools — primarily [Claude Code](https://claude.com/claude-code). I'm not hiding that, and I don't intend to. I needed a scheduling tool and didn't have the time to build one by hand, so this was the fastest way to get something that actually works. If that's not for you, that's completely fine — there are plenty of other project-scheduling tools out there. If it is, I hope you find it useful.
+
 ## Getting started
 
 1. Download `timeline-schedule-tool.html` and open it in a modern desktop browser (Chrome, Edge, or
