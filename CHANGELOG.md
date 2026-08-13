@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [1.1.0] - 2026-08-13
+
 ### Added
 
 - Task List date fields now show a tooltip on hover explaining the
@@ -102,6 +104,7 @@ version check), all of which shipped as part of this same tag.
   app header, with a best-effort check against the GitHub Releases API for
   a newer version.
 
-[Unreleased]: https://github.com/sam-ward/timeline/compare/v1.0.1...HEAD
+[Unreleased]: https://github.com/sam-ward/timeline/compare/v1.1.0...HEAD
+[1.1.0]: https://github.com/sam-ward/timeline/compare/v1.0.1...v1.1.0
 [1.0.1]: https://github.com/sam-ward/timeline/compare/v1.0.0...v1.0.1
 [1.0.0]: https://github.com/sam-ward/timeline/releases/tag/v1.0.0

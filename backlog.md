@@ -11,39 +11,25 @@ Changelog and remove from here once released).
 
 ## Bugs
 
-1. [x] Deps popover (and the Dashboard resource-filter popover) could render
-   partly off the right edge of the window, forcing a horizontal scrollbar.
-   Found while starting the dependency-lag work below. Root cause: the
-   on-screen clamp used a guessed 260px instead of the popover's real CSS
-   `max-width:300px`. Fixed with a shared `popoverLeftClamp()` using the
-   real value; also narrowed Start/End/% Done for more breathing room at
-   the time, though Start/End were reverted back to their original width
-   shortly after (the narrower date field made the native calendar icon
-   overlap the year in some browsers, and the clamp fix alone doesn't
-   actually need the columns narrower to work). In progress on
-   `feature/dependency-lag`, not yet merged; see `CHANGELOG.md`'s
-   `[Unreleased]` section.
-2. [ ] Task edit modal: the RAG status color dot is not vertically
+1. [ ] Task edit modal: the RAG status color dot is not vertically
    aligned with the status text next to it (`.status-select-wrap
    .status-dot` is `position:absolute; left:11px;` with no `top`/
    vertical-centering rule, so it just sits at its default static
    position rather than actually being centered against the `<select>`'s
    text — worth checking as the likely cause when this gets picked up).
 
-The previous batch (Gantt "Today" scroll, RAG red/amber contrast, live
-status dot, arrow-key focus loss, stale selection-highlight repaint)
-shipped in `v1.0.1`; see `CHANGELOG.md` for details.
+The previous batches (Gantt "Today" scroll, RAG red/amber contrast, live
+status dot, arrow-key focus loss, stale selection-highlight repaint,
+deps/resource popover overflow) shipped in `v1.0.1` and `v1.1.0`; see
+`CHANGELOG.md` for details.
 
 ## Improvements
 
-1. [x] Copy/paste for dates already exists (Ctrl/Cmd+C/V on a focused date
-   field) but isn't discoverable. Fixed with a hover tooltip on the Task
-   List's date fields explaining the shortcut, shown only on editable
-   (unlocked) fields since locked ones are `disabled` and can't be
-   focused to use it. Table only, not the edit modal's date fields
-   (which don't have the shortcut wired up); see `CHANGELOG.md`'s
-   `[Unreleased]` section.
-2. [ ] **Needs a design discussion before any code.** Support durations
+Copy/paste discoverability, drag-and-drop open, the Dashboard Upcoming
+split, the About update badge, and dependency lag (plus its follow-up
+fixes) shipped in `v1.1.0`; see `CHANGELOG.md` for details.
+
+1. [ ] **Needs a design discussion before any code.** Support durations
    smaller than 1 working day (e.g. half-days). Looked into the scope: the
    whole scheduling model is date-only, not date-time (`parseISO` discards
    any time component), and every function that matters treats a calendar
@@ -70,57 +56,7 @@ shipped in `v1.0.1`; see `CHANGELOG.md` for details.
    Parked pending a decision on which of these is actually wanted (most
    likely same-day sequencing is the real ask, but that's the expensive one
    to build) before any implementation starts.
-3. [x] Drag-and-drop a `.json` schedule file onto the already-open window to
-   open it. Feeds into the same `loadFromText()` path as the Open
-   button/file picker, plus a full-window drop overlay for feedback while
-   dragging. In progress on `feature/improvements-batch`, not yet merged;
-   see `CHANGELOG.md`'s `[Unreleased]` section.
-4. [x] Dashboard: separate "upcoming tasks" from "upcoming milestones" in the
-   relevant bucket, rather than listing them together. Went with two
-   separate cards ("Upcoming Tasks" / "Upcoming Milestones") rather than
-   one card with two sub-sections, matching the existing Overdue/In
-   Progress card pattern. Overdue and In Progress stay mixed; only the
-   Upcoming bucket was split. In progress on `feature/improvements-batch`,
-   not yet merged; see `CHANGELOG.md`'s `[Unreleased]` section.
-5. [x] About button (ℹ️): show an update-available indicator without
-   requiring the panel to be opened first. Not from the original list;
-   raised separately. The update check now runs once in the background on
-   load (`getUpdateCheck()`, memoized so the background check and the
-   panel's own check share one request) and adds a small orange dot to the
-   button if a newer version exists. Opening the panel clears the dot. In
-   progress on `feature/improvements-batch`, not yet merged; see
-   `CHANGELOG.md`'s `[Unreleased]` section.
-6. [x] Auto-scheduling via dependencies conflated two different concerns:
-   dependency logic (what must finish before what) and timing/sequencing
-   (when things should actually happen). Resolved with a per-dependency
-   **lag** field (signed working-day count, default 0 = old behavior
-   unchanged): positive lag waits longer after the predecessor finishes,
-   negative lag allows lead time/overlap. UI: check a dependency in the
-   Task List popover or the task edit modal, then click its date (or the
-   `+Nd`/`-Nd` badge, once set) to reveal an inline +/- stepper. Went
-   through a real design-mockup pass (four popover layouts compared, an
-   artifact published for review) before building, given how easily this
-   could have crowded the popover's already-tight 300px width. In
-   progress on `feature/dependency-lag`, not yet merged; see
-   `CHANGELOG.md`'s `[Unreleased]` section.
-
-   Two follow-up fixes found during manual testing of this feature, both
-   also on `feature/dependency-lag`:
-   - The Task List had no way to tell a lag was affecting a task's start
-     without hovering the Deps chip or opening the picker. Added a small
-     "±" flag to the chip whenever a lag is active.
-   - The dependency picker's scrollbar (once there are enough candidates
-     to scroll) could overlap the last couple of digits of the date text.
-     Both the popover and the modal's list now reserve padding for it —
-     not independently pixel-verified against a real classic scrollbar,
-     since this project's dev sandbox only renders 0-width overlay
-     scrollbars; worth a real check on Windows/Linux Chrome or Firefox.
-   - The Deps chip's width changing at all (the flag, but also just the
-     dependency count itself, e.g. "1 dep" -> "2 deps") reflowed the
-     whole table, since it isn't `table-layout:fixed`. Fixed with a
-     fixed `min-width` on the chip so its box size — and the column
-     width — never changes regardless of count or lag state.
-7. [ ] **Needs a design discussion before any code.** The Task List's
+2. [ ] **Needs a design discussion before any code.** The Task List's
    `<table>` doesn't set `table-layout:fixed`, so every column's width is
    computed from content across *every* row rather than being pinned per
    column. The Deps chip `min-width:70px` fix above works but is a
@@ -147,7 +83,7 @@ shipped in `v1.0.1`; see `CHANGELOG.md` for details.
    for what its content actually requires, and deciding how overflow
    should behave for each one (truncate? wrap? scroll?) rather than
    just patching the two instances above.
-8. [ ] **Needs a design discussion before any code — exploratory.** Explore
+3. [ ] **Needs a design discussion before any code — exploratory.** Explore
    identifying the **critical path** through a schedule, both as data and
    as an optional/toggleable visual element. Not scoped yet; open
    questions to work through before building anything:
