@@ -16,6 +16,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
   the shortcut at all.
 - Drag a `.json` schedule file onto the window to open it, alongside the
   existing Open button/file picker.
+- Dashboard: upcoming milestones now have their own "Upcoming Milestones"
+  card, separate from "Upcoming Tasks", instead of being listed together.
 
 ## [1.0.1] - 2026-08-13
 

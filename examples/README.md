@@ -23,8 +23,8 @@ and read the descriptions in the edit modal / hover tooltips as you go.
 - **Parent/summary rollups**: dates, %, and resources computed from children.
 - **RAG status**: all three colors plus "not set", including on a parent
   task.
-- **Dashboard buckets**: Overdue, In Progress (current), Upcoming, and
-  Completed are all populated.
+- **Dashboard buckets**: Overdue, In Progress (current), Upcoming Tasks,
+  Upcoming Milestones, and Completed are all populated.
 - **Resource handling**: multi-resource tasks, a case-variant name
   (`carol` vs `Carol`) to check canonicalization, and unassigned tasks (for
   the Dashboard's "Unassigned" card).

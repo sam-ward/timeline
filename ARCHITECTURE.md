@@ -482,9 +482,13 @@ page's stylesheet. Keep it that way.
 
 ### Dashboard
 
-`classifyTask(t)` buckets a task into `overdue` / `current` / `upcoming` / `completed` / `null`
-(parents return `null`; only leaf tasks are actionable work items). `taskItemHtml(t)` is the single
-shared card-renderer used everywhere a task appears on the dashboard (the three status buckets, the
+`classifyTask(t)` buckets a task into `overdue` / `current` / `upcoming` / `upcoming-milestone` /
+`completed` / `null` (parents return `null`; only leaf tasks are actionable work items). Upcoming
+tasks and upcoming milestones (`isMilestone(t)`, i.e. `duration === 0`) get separate buckets and
+separate cards ("Upcoming Tasks" / "Upcoming Milestones") so a project with several milestones
+doesn't crowd out the regular tasks in one shared list; Overdue and In Progress deliberately stay
+mixed, since that split was only asked for on the Upcoming bucket. `taskItemHtml(t)` is the single
+shared card-renderer used everywhere a task appears on the dashboard (all the status buckets, the
 per-person breakdown, and the Unassigned card). If you're changing how a task card looks, this is the
 one place to do it. The **Unassigned** card in the "By person" section is a virtual pseudo-person built
 inline in `renderDashboard()` (filtering for tasks with an empty `resources` array) rather than a real

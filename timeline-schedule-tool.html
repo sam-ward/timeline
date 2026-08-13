@@ -493,6 +493,7 @@ input.res-input{width:100%; min-width:100px; overflow:hidden; text-overflow:elli
 .dash-card.overdue h3{color:var(--danger);}
 .dash-card.current h3{color:var(--accent-dark);}
 .dash-card.upcoming h3{color:#3D5A80;}
+.dash-card.upcoming-milestone h3{color:#3D5A80;}
 .dash-list{max-height:340px; overflow:auto;}
 .dash-item{padding:9px 14px; border-bottom:1px solid var(--line); font-size:12.5px; cursor:pointer; transition:background .1s;}
 .dash-item.is-milestone{box-shadow:inset 3px 0 0 var(--accent);}
@@ -1198,7 +1199,7 @@ function printGanttChart(){
 }
 
 function buildStaticDashboardHtml(){
-  const buckets = {overdue:[], current:[], upcoming:[]};
+  const buckets = {overdue:[], current:[], upcoming:[], 'upcoming-milestone':[]};
   for(const t of state.tasks){
     const cls = classifyTask(t);
     if(cls && buckets[cls]) buckets[cls].push(t);
@@ -1211,7 +1212,7 @@ function buildStaticDashboardHtml(){
         <div class="dash-list">${items.length? items.map(taskItemHtml).join('') : `<div class="dash-empty">Nothing here.</div>`}</div>
       </div>`;
   }
-  return `<div class="dash-grid">${cardHtml('overdue','Overdue','⚠')}${cardHtml('current','In Progress','▶')}${cardHtml('upcoming','Upcoming','⏭')}</div>`;
+  return `<div class="dash-grid">${cardHtml('overdue','Overdue','⚠')}${cardHtml('current','In Progress','▶')}${cardHtml('upcoming','Upcoming Tasks','⏭')}${cardHtml('upcoming-milestone','Upcoming Milestones','◆')}</div>`;
 }
 
 /** Resolves the *currently active* theme's color variables to fixed values and returns them as a
@@ -2665,7 +2666,7 @@ function classifyTask(t){
   if(t.percentComplete>=100) return 'completed';
   if(t.end && t.end<today) return 'overdue';
   if(t.start && t.start<=today && (!t.end || t.end>=today)) return 'current';
-  if(t.start && t.start>today) return 'upcoming';
+  if(t.start && t.start>today) return isMilestone(t) ? 'upcoming-milestone' : 'upcoming';
   return 'current';
 }
 
@@ -2763,7 +2764,7 @@ function renderDashboard(){
   const content = document.getElementById('dash-content');
   const activeFilter = dashResourceFilter.length ? dashResourceFilter : null;
 
-  const buckets = {overdue:[], current:[], upcoming:[]};
+  const buckets = {overdue:[], current:[], upcoming:[], 'upcoming-milestone':[]};
   for(const t of state.tasks){
     if(activeFilter && !(t.resources||[]).some(r=>activeFilter.includes(r))) continue;
     const cls = classifyTask(t);
@@ -2782,7 +2783,8 @@ function renderDashboard(){
   let html = `<div class="dash-grid">
       ${cardHtml('overdue','Overdue','⚠')}
       ${cardHtml('current','In Progress','▶')}
-      ${cardHtml('upcoming','Upcoming','⏭')}
+      ${cardHtml('upcoming','Upcoming Tasks','⏭')}
+      ${cardHtml('upcoming-milestone','Upcoming Milestones','◆')}
     </div>`;
 
   // by-person breakdown: all resources when nothing's selected, otherwise just the selected ones

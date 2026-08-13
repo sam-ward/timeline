@@ -56,9 +56,13 @@ repaint) shipped in `v1.0.1`; see `CHANGELOG.md` for details.
    button/file picker, plus a full-window drop overlay for feedback while
    dragging. In progress on `feature/improvements-batch`, not yet merged;
    see `CHANGELOG.md`'s `[Unreleased]` section.
-4. [ ] Dashboard: separate "upcoming tasks" from "upcoming milestones" in the
-   relevant bucket, rather than listing them together. (Tentative, worth
-   confirming the exact desired grouping before building.)
+4. [x] Dashboard: separate "upcoming tasks" from "upcoming milestones" in the
+   relevant bucket, rather than listing them together. Went with two
+   separate cards ("Upcoming Tasks" / "Upcoming Milestones") rather than
+   one card with two sub-sections, matching the existing Overdue/In
+   Progress card pattern. Overdue and In Progress stay mixed; only the
+   Upcoming bucket was split. In progress on `feature/improvements-batch`,
+   not yet merged; see `CHANGELOG.md`'s `[Unreleased]` section.
 5. [ ] **Needs a design discussion before any code.** Auto-scheduling via
    dependencies is useful but currently conflates two different concerns:
    dependency logic (what must finish before what) and timing/sequencing
