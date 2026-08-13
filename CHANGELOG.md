@@ -39,8 +39,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
   could render partially off the right edge of the window, forcing a
   horizontal scrollbar. The clamp keeping these popovers on-screen used a
   guessed width instead of the popover's real CSS max-width.
-- Task List: Start, End, and % Done columns are a little narrower, giving
-  the Deps popover more room to open without needing to clamp at all.
+- Task List: % Done column is a little narrower, giving the Deps popover
+  more room to open without needing to clamp at all. (Start/End were
+  narrowed too in an earlier pass, but that made the native date
+  picker's calendar icon overlap the last digit of the year in some
+  browsers — reverted to their original width, since the popover clamp
+  fix above doesn't actually depend on the columns being narrower.)
 - Dependency picker (Task List popover and task edit modal): once there
   were enough candidates to scroll, the scrollbar could overlap the last
   couple of digits of the right-aligned date text. Both lists now reserve

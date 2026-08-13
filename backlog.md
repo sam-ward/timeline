@@ -16,9 +16,13 @@ Changelog and remove from here once released).
    Found while starting the dependency-lag work below. Root cause: the
    on-screen clamp used a guessed 260px instead of the popover's real CSS
    `max-width:300px`. Fixed with a shared `popoverLeftClamp()` using the
-   real value, plus slightly narrower Start/End/% Done columns for more
-   breathing room. In progress on `feature/dependency-lag`, not yet merged;
-   see `CHANGELOG.md`'s `[Unreleased]` section.
+   real value; also narrowed Start/End/% Done for more breathing room at
+   the time, though Start/End were reverted back to their original width
+   shortly after (the narrower date field made the native calendar icon
+   overlap the year in some browsers, and the clamp fix alone doesn't
+   actually need the columns narrower to work). In progress on
+   `feature/dependency-lag`, not yet merged; see `CHANGELOG.md`'s
+   `[Unreleased]` section.
 
 The previous batch (Gantt "Today" scroll, RAG red/amber contrast, live
 status dot, arrow-key focus loss, stale selection-highlight repaint)
