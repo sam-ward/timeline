@@ -19,12 +19,35 @@ repaint) shipped in `v1.0.1`; see `CHANGELOG.md` for details.
 
 1. [ ] Copy/paste for dates already exists (Ctrl/Cmd+C/V on a focused date
    field) but isn't discoverable; user didn't know it was there. Consider a
-   hint/tooltip, or otherwise surfacing it. (See bug 5 above for a related
-   usability rough edge in the same area.)
-2. [ ] Support durations smaller than 1 working day (e.g. half-days). Bigger
-   change, touches `recalcAll()`, `sanitizeDuration()`, and brushes against
-   the `duration === 0` milestone convention. Needs a short design pass
-   before implementation, not just a drive-by fix.
+   hint/tooltip, or otherwise surfacing it. In progress on
+   `feature/date-copy-paste-tooltip`, not yet merged.
+2. [ ] **Needs a design discussion before any code.** Support durations
+   smaller than 1 working day (e.g. half-days). Looked into the scope: the
+   whole scheduling model is date-only, not date-time (`parseISO` discards
+   any time component), and every function that matters treats a calendar
+   day as the atomic unit (`addWorkingDays()`, `countWorkingDays()`,
+   dependency chaining in `earliestStartFromPredecessors()`, and the Gantt's
+   pixels-per-day bar geometry). That splits "half-day durations" into two
+   materially different features:
+   - **Cosmetic/reporting only**: a task can be *labeled* "0.5d" for display
+     and rollup math, but still occupies a whole calendar-day slot for
+     scheduling purposes (two half-day tasks on the same day still can't be
+     sequenced same-day). Small, contained change: loosen `sanitizeDuration`
+     to allow fractional values above 0, stop relying on `duration === 0`
+     alone for the milestone check (it currently collides with any
+     fractional value between 0 and 1), adjust bar-width/rollup math to use
+     the fraction.
+   - **Real same-day sequencing**: a task can finish mid-day and a dependent
+     task starts later that same working day. Needs an actual time-of-day
+     model, not just a fractional day count: dates become datetimes, a
+     working-day window needs defining (9-5? configurable?), and
+     `addWorkingDays`/`countWorkingDays`/dependency math/Gantt pixel math all
+     move from day-granularity to hour-granularity. This is a genuine
+     rearchitecture, not a bug fix.
+
+   Parked pending a decision on which of these is actually wanted (most
+   likely same-day sequencing is the real ask, but that's the expensive one
+   to build) before any implementation starts.
 3. [ ] Drag-and-drop a `.json` schedule file onto the already-open window to
    open it (in addition to the existing Open button/file picker).
 4. [ ] Dashboard: separate "upcoming tasks" from "upcoming milestones" in the
