@@ -375,6 +375,23 @@ input.res-input{width:100%; min-width:100px; overflow:hidden; text-overflow:elli
 .pop-row .dep-name{flex:1; min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;}
 .pop-row .dep-date{flex:none; color:var(--text-mute); font-size:10.5px; font-family:var(--font-mono); margin-left:10px;}
 .pop-empty{color:var(--text-mute); font-size:12px; padding:6px 2px;}
+/* dependency lag control (Task List popover + task edit modal "Depends on" list) */
+.dep-lag-wrap{flex:none; display:flex; align-items:center; gap:4px; margin-left:10px;}
+.dep-lag-wrap .dep-date[data-dep-lag-toggle],
+.dep-lag-wrap .dep-badge{
+  cursor:pointer; border-bottom:1px dashed var(--line-strong); margin-left:0;
+}
+.dep-badge{
+  font-family:var(--font-mono); font-size:10px; color:var(--accent-dark); background:var(--accent-light);
+  padding:1px 5px; border-radius:4px;
+}
+.stepper.mini{display:flex; align-items:center; gap:2px; font-family:var(--font-mono); font-size:10px;}
+.stepper.mini button{
+  width:14px; height:14px; border:1px solid var(--line-strong); background:var(--paper); color:var(--text);
+  border-radius:3px; font-size:10px; line-height:1; padding:0; cursor:pointer;
+}
+.stepper.mini button:hover{border-color:var(--accent); color:var(--accent-dark);}
+.stepper.mini .val{width:26px; text-align:center; color:var(--text); font-weight:600;}
 
 /* ---------- Modal ---------- */
 .modal-backdrop{
@@ -671,7 +688,7 @@ const state = {
   end: "YYYY-MM-DD",
   manualEnd: bool,       // if true, end is user-controlled and duration is derived
   percentComplete: 0-100,
-  predecessors: [taskId],
+  predecessors: [{id: taskId, lag: number}],  // lag: working days after predecessor's end (may be negative)
   parentId: taskId|null
 }
 */
@@ -792,6 +809,26 @@ function nextWorkingDayInclusive(d){
 function normalizeWorkingDayISO(iso){
   if(!iso) return iso;
   return toISO(nextWorkingDayInclusive(parseISO(iso)));
+}
+
+/** Steps n working days away from an ISO date, skipping weekends/holidays, not counting the
+ *  starting date itself. n may be negative (step backward) or zero (returns the same date
+ *  unchanged). Used by earliestStartFromPredecessors() to apply a dependency's lag/lead on top of
+ *  the usual "next working day after the predecessor's end" rule: stepWorkingDays(end, 1) with no
+ *  lag reproduces that exactly (verify: end=Friday -> Saturday isn't a working day -> Sunday isn't
+ *  either -> Monday is, same result as the old nextWorkingDayInclusive(addDays(end,1)) call this
+ *  replaced). Negative n intentionally allows landing on or before the starting date itself — that
+ *  is lead time (a dependent task starting before its predecessor is fully finished), not a bug. */
+function stepWorkingDays(iso, n){
+  let d = parseISO(iso);
+  if(!n) return toISO(d);
+  const dir = n > 0 ? 1 : -1;
+  let remaining = Math.abs(n);
+  while(remaining > 0){
+    d = addDays(d, dir);
+    if(isWorkingDay(d)) remaining--;
+  }
+  return toISO(d);
 }
 
 /** Parses a raw duration value, allowing an explicit 0 (milestone) rather than treating it as falsy. */
@@ -1041,9 +1078,9 @@ function buildGanttTimelineHtml(opts){
 
   let paths='';
   for(const {task:t} of rows){
-    for(const pid of (t.predecessors||[])){
-      const p=byId(pid);
-      if(!p || !(pid in rowY) || !(t.id in rowY)) continue;
+    for(const link of (t.predecessors||[])){
+      const p=byId(link.id);
+      if(!p || !(link.id in rowY) || !(t.id in rowY)) continue;
       const x1=(isMilestone(p)?xForISO(p.end)+DW/2:xForISO(p.end)+DW-2), y1=rowY[p.id];
       const x2=(isMilestone(t)?xForISO(t.start)+DW/2:xForISO(t.start)+2), y2=rowY[t.id];
       const midX=x1+Math.max(8,(x2-x1)/2);
@@ -1367,6 +1404,28 @@ function nextStatus(current){
 }
 const STATUS_TITLES = { green: 'On track', amber: 'At risk', red: 'Off track', null: 'Status not set' };
 
+/** Parses a raw lag value (working days a dependency waits after its predecessor's end before the
+ *  successor becomes eligible to start). Negative = lead time (successor can start before the
+ *  predecessor fully finishes). Anything malformed collapses to 0, same "no lag" behavior as every
+ *  schedule saved before this field existed. */
+function sanitizeLag(raw){
+  const n = Number(raw);
+  return Number.isFinite(n) ? Math.round(n) : 0;
+}
+
+/** Normalizes a task's predecessors into `[{id, lag}]`. Accepts legacy plain-id arrays (every
+ *  schedule saved before lag existed, `predecessors: ["taskId", ...]`) by wrapping each id as
+ *  `{id, lag: 0}` — that reproduces the old "start the working day right after the predecessor
+ *  ends" behavior exactly, so old files don't need migrating on disk, just on load. */
+function normalizePredecessors(raw){
+  if(!Array.isArray(raw)) return [];
+  return raw.map(entry=>{
+    if(typeof entry === 'string') return {id: entry, lag: 0};
+    if(entry && typeof entry === 'object' && entry.id) return {id: entry.id, lag: sanitizeLag(entry.lag)};
+    return null;
+  }).filter(Boolean);
+}
+
 function normalizeTask(t){
   return {
     id: t.id || uid(),
@@ -1380,7 +1439,7 @@ function normalizeTask(t){
     manualEnd: !!t.manualEnd,
     percentComplete: Math.min(100, Math.max(0, Number(t.percentComplete)||0)),
     status: sanitizeStatus(t.status),
-    predecessors: Array.isArray(t.predecessors) ? t.predecessors.slice() : [],
+    predecessors: normalizePredecessors(t.predecessors),
     parentId: t.parentId || null,
     collapsed: !!t.collapsed
   };
@@ -1487,14 +1546,19 @@ function flattenVisible(){
    then roll parent (summary) dates up from children, repeat until stable.
    ========================================================================= */
 function earliestStartFromPredecessors(task){
-  let latestEnd = null;
-  for(const pid of (task.predecessors||[])){
-    const p = byId(pid);
+  let latestStart = null;
+  for(const link of (task.predecessors||[])){
+    const p = byId(link.id);
     if(!p || !p.end) continue;
-    if(!latestEnd || p.end > latestEnd) latestEnd = p.end;
+    // 1 working day after the predecessor's end, same as before lag existed, adjusted by that
+    // edge's own lag (positive = wait longer, negative = lead time / overlap). Each predecessor's
+    // lag is independent, so with multiple predecessors the latest resulting candidate date wins,
+    // not simply the latest predecessor end (a short lag on the later-finishing predecessor could
+    // still lose to a longer lag on an earlier-finishing one).
+    const candidate = stepWorkingDays(p.end, 1 + (link.lag || 0));
+    if(!latestStart || candidate > latestStart) latestStart = candidate;
   }
-  if(!latestEnd) return null;
-  return toISO(nextWorkingDayInclusive(addDays(parseISO(latestEnd), 1)));
+  return latestStart;
 }
 
 /** A task's own ancestor (parent/grandparent/...) can never be a valid predecessor — the ancestor's
@@ -1506,7 +1570,7 @@ function stripCircularPredecessors(){
   for(const t of state.tasks){
     if(!t.predecessors || !t.predecessors.length) continue;
     const ancestors = new Set(ancestorIds(t.id));
-    const clean = t.predecessors.filter(pid=>!ancestors.has(pid));
+    const clean = t.predecessors.filter(link=>!ancestors.has(link.id));
     if(clean.length !== t.predecessors.length){ t.predecessors = clean; removedAny = true; }
   }
   return removedAny;
@@ -1665,7 +1729,7 @@ function deleteTask(id){
   state.tasks = state.tasks.filter(t=>!toRemove.has(t.id));
   // clean dangling predecessor references
   for(const t of state.tasks){
-    t.predecessors = (t.predecessors||[]).filter(pid=>!toRemove.has(pid));
+    t.predecessors = (t.predecessors||[]).filter(link=>!toRemove.has(link.id));
   }
   markDirty();
   recalcAll();
@@ -1886,10 +1950,11 @@ function buildResourcesTooltipHtml(t){
 function buildDepsTooltipHtml(t){
   if(!t.predecessors || !t.predecessors.length) return null;
   let html = `<div class="tt-title">Depends on</div>`;
-  for(const pid of t.predecessors){
-    const p = byId(pid);
+  for(const link of t.predecessors){
+    const p = byId(link.id);
     if(!p) continue;
-    html += `<div class="tt-row"><b>${escapeHtml(displayName(p))}</b><span class="tt-date">${fmtDate(p.start)} → ${fmtDate(p.end)}</span></div>`;
+    const lagText = link.lag ? ` (${link.lag>0?'+':''}${link.lag}d lag)` : '';
+    html += `<div class="tt-row"><b>${escapeHtml(displayName(p))}</b><span class="tt-date">${fmtDate(p.start)} → ${fmtDate(p.end)}${lagText}</span></div>`;
   }
   return html;
 }
@@ -2057,16 +2122,85 @@ function popoverLeftClamp(rect){
   return Math.max(8, left);
 }
 
+/* ---- shared dependency-row markup + lag interaction, used by both openDepsPopover() and
+   openTaskEditModal() — see the "Dependency pickers" section of ARCHITECTURE.md ---- */
+
+/** One candidate row: a checkbox, the task's name (indented by tree depth), and — only once
+ *  checked — its lag control. Unchecked rows show a plain, non-interactive end date (informational
+ *  only: lag doesn't apply until the dependency actually exists). `checkboxClass` lets each caller
+ *  keep its own selector (`.te-dep` in the modal, unclassed in the popover). */
+function depRowHtml(id, checked, lag, checkboxClass){
+  const ot = byId(id);
+  const indent = depthOf(id) * 14;
+  const trailing = checked
+    ? `<span class="dep-lag-wrap" data-dep-id="${id}">${depLagRestingHtml(ot, lag)}</span>`
+    : `<span class="dep-date">${fmtDate(ot.end)}</span>`;
+  return `<label class="pop-row${checked?' checked':''}" data-filter-text="${escapeAttr(displayName(ot).toLowerCase())}"><input type="checkbox" class="${checkboxClass||''}" value="${id}" ${checked?'checked':''}> <span class="dep-name" style="padding-left:${indent}px;">${escapeHtml(displayName(ot))}</span>${trailing}</label>`;
+}
+/** Resting state of a checked row's lag control: the date, plus a small "+Nd"/"-Nd" badge once a
+ *  non-zero lag is set. Both are click targets (`data-dep-lag-toggle`) that reveal the stepper. */
+function depLagRestingHtml(ot, lag){
+  const badge = lag ? `<span class="dep-badge" data-dep-lag-toggle>${lag>0?'+':''}${lag}d</span>` : '';
+  return `<span class="dep-date" data-dep-lag-toggle>${fmtDate(ot.end)}</span>${badge}`;
+}
+/** Mid-edit state: a compact +/- stepper, revealed in place over the same `.dep-lag-wrap` span. */
+function depLagStepperHtml(lag){
+  return `<span class="stepper mini"><button type="button" data-lag-dir="-1" aria-label="Decrease lag">&minus;</button><span class="val">${lag>0?'+':''}${lag}d</span><button type="button" data-lag-dir="1" aria-label="Increase lag">+</button></span>`;
+}
+/** Wires the click-to-reveal lag stepper (Option E from the design discussion) for one dependency
+ *  picker container: clicking a checked row's date/badge reveals the stepper in place; clicking a
+ *  stepper button adjusts the value and commits immediately via `onLagChange`; clicking anywhere
+ *  else in the container (another row, a checkbox, empty space) collapses any open stepper back to
+ *  its resting date/badge display. Only one row is ever in edit state at a time. `getLag`/
+ *  `onLagChange` abstract over where the value actually lives: committed straight to the task for
+ *  the popover, held in local pending state until Save for the modal (see each call site). */
+function wireDepLagInteraction(container, {getLag, onLagChange}){
+  let activeId = null;
+  function renderWrap(id, lag, editing){
+    const wrap = container.querySelector(`.dep-lag-wrap[data-dep-id="${id}"]`);
+    if(!wrap) return;
+    wrap.innerHTML = editing ? depLagStepperHtml(lag) : depLagRestingHtml(byId(id), lag);
+  }
+  function collapse(){
+    if(activeId==null) return;
+    renderWrap(activeId, getLag(activeId), false);
+    activeId = null;
+  }
+  container.addEventListener('click', (e)=>{
+    const dirBtn = e.target.closest('[data-lag-dir]');
+    if(dirBtn){
+      e.preventDefault(); e.stopPropagation(); // inside a <label> — don't let this toggle the checkbox
+      const id = dirBtn.closest('.dep-lag-wrap').dataset.depId;
+      const newLag = getLag(id) + Number(dirBtn.dataset.lagDir);
+      onLagChange(id, newLag);
+      renderWrap(id, newLag, true);
+      activeId = id;
+      return;
+    }
+    const toggle = e.target.closest('[data-dep-lag-toggle]');
+    if(toggle){
+      e.preventDefault(); e.stopPropagation();
+      const id = toggle.closest('.dep-lag-wrap').dataset.depId;
+      if(activeId === id) return; // already open
+      collapse();
+      activeId = id;
+      renderWrap(id, getLag(id), true);
+      return;
+    }
+    if(activeId!=null && e.target.closest(`.dep-lag-wrap[data-dep-id="${activeId}"]`)) return; // click inside the open stepper, not on a button — no-op
+    collapse();
+  });
+}
+
 function openDepsPopover(anchorBtn, taskId){
   const root = document.getElementById('popover-root');
   const t = byId(taskId);
   const options = eligiblePredecessorIds(taskId);
   const rect = anchorBtn.getBoundingClientRect();
+  const linkFor = id => (t.predecessors||[]).find(l=>l.id===id);
   const rowsHtml = options.length ? options.map(id=>{
-    const ot = byId(id);
-    const checked = (t.predecessors||[]).includes(id);
-    const indent = depthOf(id) * 14;
-    return `<label class="pop-row" data-filter-text="${escapeAttr(displayName(ot).toLowerCase())}"><input type="checkbox" value="${id}" ${checked?'checked':''}> <span class="dep-name" style="padding-left:${indent}px;">${escapeHtml(displayName(ot))}</span><span class="dep-date">${fmtDate(ot.end)}</span></label>`;
+    const link = linkFor(id);
+    return depRowHtml(id, !!link, link?link.lag:0, '');
   }).join('') : `<div class="pop-empty">No other tasks available yet.</div>`;
 
   root.innerHTML = `<div class="popover" style="top:${rect.bottom+window.scrollY+4}px; left:${popoverLeftClamp(rect)}px;">
@@ -2086,14 +2220,26 @@ function openDepsPopover(anchorBtn, taskId){
   }
   root.querySelectorAll('input[type=checkbox]').forEach(cb=>{
     cb.addEventListener('change', ()=>{
-      const sel = Array.from(root.querySelectorAll('input[type=checkbox]:checked')).map(x=>x.value);
-      t.predecessors = sel;
+      const checkedIds = Array.from(root.querySelectorAll('input[type=checkbox]:checked')).map(x=>x.value);
+      const prevLagById = new Map((t.predecessors||[]).map(link=>[link.id, link.lag]));
+      t.predecessors = checkedIds.map(id=>({id, lag: prevLagById.get(id) || 0}));
       markDirty();
       recalcAll();
       renderAll();
       // reopen so it stays visible with fresh state
       openDepsPopover(document.querySelector(`tr[data-id="${taskId}"] [data-act="deps"]`), taskId);
     });
+  });
+  wireDepLagInteraction(root.querySelector('.popover'), {
+    getLag: id => { const link = linkFor(id); return link ? link.lag : 0; },
+    onLagChange: (id, newLag) => {
+      const link = linkFor(id);
+      if(!link) return;
+      link.lag = Math.round(newLag);
+      markDirty();
+      recalcAll();
+      renderAll(); // safe while the popover is open — renderAll() never touches #popover-root
+    }
   });
   setTimeout(()=>document.addEventListener('click', outsidePopoverClick), 0);
 }
@@ -2146,12 +2292,17 @@ function openTaskEditModal(taskId){
   const durationLocked = isParent || !!t.manualEnd;
   const rollupLocked = isParent; // %, resources — always derived from subtasks
   const eligible = eligiblePredecessorIds(taskId);
+  // Local editable copy of predecessors (id + lag), same "commit only on Save" model as every
+  // other field in this modal — unlike the Task List popover, which commits each change live. See
+  // depRowHtml()/wireDepLagInteraction() above for the markup/interaction this shares with the
+  // popover, and the "Dependency pickers" section of ARCHITECTURE.md for why the commit timing
+  // still has to differ between the two.
+  let pendingDeps = (t.predecessors||[]).map(l=>({id:l.id, lag:l.lag||0}));
+  const pendingLink = id => pendingDeps.find(l=>l.id===id);
 
   const depsRows = eligible.length ? eligible.map(id=>{
-    const ot = byId(id);
-    const checked = (t.predecessors||[]).includes(id);
-    const indent = depthOf(id) * 14;
-    return `<label class="pop-row" data-filter-text="${escapeAttr(displayName(ot).toLowerCase())}"><input type="checkbox" class="te-dep" value="${id}" ${checked?'checked':''}> <span class="dep-name" style="padding-left:${indent}px;">${escapeHtml(displayName(ot))}</span><span class="dep-date">${fmtDate(ot.end)}</span></label>`;
+    const link = pendingLink(id);
+    return depRowHtml(id, !!link, link?link.lag:0, 'te-dep');
   }).join('') : `<div class="pop-empty">No other tasks available.</div>`;
 
   /** Builds the % Complete field (or the milestone "Complete" toggle, or a disabled/derived display
@@ -2262,7 +2413,26 @@ function openTaskEditModal(taskId){
     startInput.disabled = anyChecked;
     if(startHint) startHint.style.display = anyChecked ? 'block' : 'none';
   }
-  root.querySelectorAll('.te-dep').forEach(cb=>cb.addEventListener('change', refreshStartLock));
+  // --- reactive: ticking/unticking a dependency updates pendingDeps and swaps that row's trailing
+  // span between a plain date (unchecked) and the lag-capable date+badge (checked) in place, same
+  // as the popover, but without committing to `t` or touching recalc/render until Save ---
+  root.querySelectorAll('.te-dep').forEach(cb=>cb.addEventListener('change', ()=>{
+    const label = cb.closest('.pop-row');
+    if(cb.checked){
+      if(!pendingLink(cb.value)) pendingDeps.push({id: cb.value, lag: 0});
+      label.classList.add('checked');
+      label.querySelector('.dep-date, .dep-lag-wrap').outerHTML = `<span class="dep-lag-wrap" data-dep-id="${cb.value}">${depLagRestingHtml(byId(cb.value), 0)}</span>`;
+    } else {
+      pendingDeps = pendingDeps.filter(l=>l.id!==cb.value);
+      label.classList.remove('checked');
+      label.querySelector('.dep-date, .dep-lag-wrap').outerHTML = `<span class="dep-date">${fmtDate(byId(cb.value).end)}</span>`;
+    }
+    refreshStartLock();
+  }));
+  wireDepLagInteraction(root.querySelector('.modal-body'), {
+    getLag: id => { const link = pendingLink(id); return link ? link.lag : 0; },
+    onLagChange: (id, newLag) => { const link = pendingLink(id); if(link) link.lag = Math.round(newLag); }
+  });
 
   const depFilterInput = document.getElementById('te-dep-filter');
   if(depFilterInput){
@@ -2324,7 +2494,7 @@ function openTaskEditModal(taskId){
       pct: readPct(),
       status: document.getElementById('te-status').value,
       resources: readResources(),
-      deps: Array.from(root.querySelectorAll('.te-dep:checked')).map(cb=>cb.value).sort(),
+      deps: pendingDeps.map(l=>`${l.id}:${l.lag}`).sort().join(','),
       desc: document.getElementById('te-desc').value,
       notes: document.getElementById('te-notes').value
     });
@@ -2378,7 +2548,7 @@ function openTaskEditModal(taskId){
       // belt-and-braces: a milestone never keeps resources, regardless of what the (disabled) field showed
       if(isMilestone(t) && !isParent) t.resources = [];
     }
-    t.predecessors = Array.from(root.querySelectorAll('.te-dep:checked')).map(cb=>cb.value);
+    t.predecessors = pendingDeps.map(l=>({id: l.id, lag: l.lag}));
     t.status = sanitizeStatus(document.getElementById('te-status').value);
     t.description = document.getElementById('te-desc').value;
     t.notes = document.getElementById('te-notes').value;
@@ -2528,9 +2698,9 @@ function renderGantt(){
   const svg = document.getElementById('dep-svg');
   let paths = '';
   for(const {task:t} of rows){
-    for(const pid of (t.predecessors||[])){
-      const p = byId(pid);
-      if(!p || !(pid in rowY) || !(t.id in rowY)) continue;
+    for(const link of (t.predecessors||[])){
+      const p = byId(link.id);
+      if(!p || !(link.id in rowY) || !(t.id in rowY)) continue;
       const x1 = isMilestone(p) ? xForISO(p.end) + dayWidth/2 : xForISO(p.end) + dayWidth - 2;
       const y1 = rowY[p.id];
       const x2 = isMilestone(t) ? xForISO(t.start) + dayWidth/2 : xForISO(t.start) + 2;

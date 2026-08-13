@@ -21,6 +21,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 - The About button (ℹ️) now checks for a newer version in the background
   on load and shows a small orange dot if one's available, instead of
   only surfacing that after opening the About panel.
+- Dependencies can now have a **lag** (or negative lag / lead time): a
+  number of working days a dependent task waits after its predecessor
+  finishes before it's eligible to start, instead of always starting the
+  very next working day. Set per dependency from the Task List's Deps
+  popover or the task edit modal's "Depends on" list — check a
+  dependency, then click its date (or, once a lag is set, the small
+  badge next to it) to reveal a +/- stepper in place. A lag of 0
+  (the default, and what every existing dependency has) behaves exactly
+  as before.
 
 ### Fixed
 

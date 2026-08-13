@@ -80,13 +80,19 @@ shipped in `v1.0.1`; see `CHANGELOG.md` for details.
    button if a newer version exists. Opening the panel clears the dot. In
    progress on `feature/improvements-batch`, not yet merged; see
    `CHANGELOG.md`'s `[Unreleased]` section.
-6. [ ] **Needs a design discussion before any code.** Auto-scheduling via
-   dependencies is useful but currently conflates two different concerns:
+6. [x] Auto-scheduling via dependencies conflated two different concerns:
    dependency logic (what must finish before what) and timing/sequencing
-   (when things should actually happen). Possible directions: allow a manual
-   start-date override even when a dependency exists, a separate lead/lag
-   field, or something else. Explicitly parked until the smaller items below
-   are cleared; revisit then.
+   (when things should actually happen). Resolved with a per-dependency
+   **lag** field (signed working-day count, default 0 = old behavior
+   unchanged): positive lag waits longer after the predecessor finishes,
+   negative lag allows lead time/overlap. UI: check a dependency in the
+   Task List popover or the task edit modal, then click its date (or the
+   `+Nd`/`-Nd` badge, once set) to reveal an inline +/- stepper. Went
+   through a real design-mockup pass (four popover layouts compared, an
+   artifact published for review) before building, given how easily this
+   could have crowded the popover's already-tight 300px width. In
+   progress on `feature/dependency-lag`, not yet merged; see
+   `CHANGELOG.md`'s `[Unreleased]` section.
 
 ## Broader / process (tackling first)
 

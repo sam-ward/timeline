@@ -42,7 +42,7 @@ const DEBUG_EXPORTS = [
   'state', 'byId', 'addTask', 'recalcAll', 'isMilestone', 'sanitizeDuration',
   'addWorkingDays', 'countWorkingDays', 'hasChildren', 'childrenOf',
   'eligiblePredecessorIds', 'serialize', 'loadFromText', 'allResources',
-  'classifyTask'
+  'classifyTask', 'stepWorkingDays', 'normalizeTask'
 ];
 
 function wait(ms) { return new Promise(r => setTimeout(r, ms)); }
@@ -103,13 +103,59 @@ async function main() {
     const t2 = D.addTask(null);
     t2.name = 'Build';
     t2.duration = 3;
-    t2.predecessors = [t1.id];
+    t2.predecessors = [{id: t1.id, lag: 0}];
     D.recalcAll();
     window.renderAll();
     await wait(20);
     check('dependent task starts the working day after its predecessor ends', t2.start > t1.end);
     check('dependent task Start field is locked once it has a dependency',
       doc.querySelector(`tr[data-id="${t2.id}"] [data-field="start"]`).disabled);
+  }
+
+  console.log('\n--- Dependency lag ---');
+  {
+    const p = D.addTask(null);
+    p.name = 'Vendor sign-off';
+    p.start = '2026-08-10'; // Monday
+    p.duration = 5;         // ends Friday 2026-08-14
+    D.recalcAll();
+
+    const zeroLag = D.addTask(null);
+    zeroLag.name = 'No lag';
+    zeroLag.duration = 1;
+    zeroLag.predecessors = [{id: p.id, lag: 0}];
+
+    const positiveLag = D.addTask(null);
+    positiveLag.name = 'Positive lag';
+    positiveLag.duration = 1;
+    positiveLag.predecessors = [{id: p.id, lag: 2}];
+
+    const negativeLag = D.addTask(null);
+    negativeLag.name = 'Negative lag (lead)';
+    negativeLag.duration = 1;
+    negativeLag.predecessors = [{id: p.id, lag: -1}];
+
+    D.recalcAll();
+    check('zero lag reproduces plain finish-to-start (next working day after predecessor ends)',
+      zeroLag.start === '2026-08-17'); // Fri 14th + 1 working day = Mon 17th
+    check('positive lag pushes the start later than plain finish-to-start',
+      positiveLag.start > zeroLag.start);
+    check('negative lag (lead) allows starting on or before the predecessor\'s own end date',
+      negativeLag.start <= p.end);
+
+    check('stepWorkingDays(iso, 1) matches the old next-working-day-after rule',
+      D.stepWorkingDays('2026-08-14', 1) === '2026-08-17'); // Fri -> Mon, skipping the weekend
+    check('stepWorkingDays(iso, 0) returns the same date unchanged',
+      D.stepWorkingDays('2026-08-14', 0) === '2026-08-14');
+
+    // A schedule saved before lag existed has predecessors as a plain array of ids, not
+    // {id, lag} objects — normalizeTask() must still migrate and schedule it correctly.
+    const legacyRaw = { id: 'legacy1', name: 'Legacy dep', duration: 1, predecessors: [p.id] };
+    const legacyTask = D.normalizeTask(legacyRaw);
+    check('legacy plain-id predecessors array normalizes to [{id, lag: 0}]',
+      legacyTask.predecessors.length === 1 &&
+      legacyTask.predecessors[0].id === p.id &&
+      legacyTask.predecessors[0].lag === 0);
   }
 
   console.log('\n--- Milestones ---');
