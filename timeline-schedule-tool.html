@@ -343,7 +343,7 @@ input.res-input{width:100%; min-width:100px; overflow:hidden; text-overflow:elli
    column widths from content across every row, so if only flagged rows were wider, checking one
    dependency's lag on/off would visibly reflow the whole table, not just that button — this
    overlays the flag via ::after (out of flow) inside space that's already always there instead. */
-.chip-btn.dep-chip{position:relative; padding-right:16px;}
+.chip-btn.dep-chip{position:relative; padding-right:16px; min-width:70px; box-sizing:border-box; text-align:center;}
 .chip-btn.dep-chip.has-lag::after{
   content:'±'; position:absolute; right:5px; top:50%; transform:translateY(-50%);
   color:var(--warn); font-weight:700; font-size:11px; line-height:1;

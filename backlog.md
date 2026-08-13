@@ -105,6 +105,11 @@ shipped in `v1.0.1`; see `CHANGELOG.md` for details.
      not independently pixel-verified against a real classic scrollbar,
      since this project's dev sandbox only renders 0-width overlay
      scrollbars; worth a real check on Windows/Linux Chrome or Firefox.
+   - The Deps chip's width changing at all (the flag, but also just the
+     dependency count itself, e.g. "1 dep" -> "2 deps") reflowed the
+     whole table, since it isn't `table-layout:fixed`. Fixed with a
+     fixed `min-width` on the chip so its box size — and the column
+     width — never changes regardless of count or lag state.
 
 ## Broader / process (tackling first)
 
