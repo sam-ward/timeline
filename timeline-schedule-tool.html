@@ -2827,6 +2827,10 @@ function openAboutModal(){
   // the user has now seen the About panel (and, once the check resolves, the update status text
   // inside it), so the "look at me" badge on the toolbar button has done its job
   document.getElementById('btn-about').classList.remove('has-update');
+  // Opening the panel is a deliberate "check now" action, so it should never just replay a
+  // possibly-long-stale cached result from earlier in this page's lifetime (e.g. the background
+  // check that ran once on load) — invalidate the memo first so this always hits the network.
+  updateCheckPromise = null;
   getUpdateCheck().then(info => {
     const target = document.getElementById('about-update-status');
     if(!target) return; // modal was closed before the check resolved
@@ -2841,8 +2845,12 @@ function openAboutModal(){
 
 // Best-effort only: silently gives up on any network/CORS/rate-limit failure rather than showing
 // an error state — this is a "nice to know", not something the app depends on. Memoized to a
-// single promise so the background check (on load) and the About modal's own check (if opened
-// before/after) share one network request instead of firing twice.
+// single promise so a check already in flight (e.g. the background check racing the modal being
+// opened right at page load) is reused rather than duplicated — but this is NOT a long-lived
+// cache: openAboutModal() explicitly resets it to null every time the panel opens, since a stale
+// answer from earlier in a long-lived tab is actively misleading (found live: a tab that had been
+// open since before a new version was published kept reporting "you have the latest version"
+// indefinitely, because the one-off background check's result was being replayed forever).
 let updateCheckPromise = null;
 function getUpdateCheck(){
   if(updateCheckPromise) return updateCheckPromise;

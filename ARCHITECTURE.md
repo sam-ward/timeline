@@ -343,18 +343,27 @@ GitHub repo (`GITHUB_REPO`, also defined in the `VERSION` section), and the lice
 
 The update check itself lives in `getUpdateCheck()`, a best-effort `fetch()` against the GitHub
 Releases API (`GET /repos/{GITHUB_REPO}/releases/latest`) that compares the latest tag against
-`APP_VERSION` via `compareSemver()`. It's memoized to a single promise (`updateCheckPromise`) rather
-than re-fetched on every call, because there are two independent callers: a background check that
-fires once at load (adding a `.has-update` badge, a small dot via CSS `::after`, to `#btn-about` if a
-newer version exists, so the user doesn't have to think to open the panel to find out) and
-`openAboutModal()`'s own check when the panel is opened (populating `#about-update-status` with a
-link to the newer release, or "You have the latest version."). Opening the panel also clears the
-badge (`btn-about.classList.remove('has-update')`) immediately, on the theory that the user has now
-seen it regardless of whether the check has resolved yet. This is genuinely best-effort throughout:
-any failure (offline, blocked by CORS/an ad blocker, rate-limited, opened from a sandboxed/local
-context that blocks the request) is caught and resolves to `null` rather than showing an error or
-badge. Checking for updates is a "nice to know," not something the app depends on to function, and it
-must never block or break opening the About panel itself.
+`APP_VERSION` via `compareSemver()`. It's memoized to a single promise (`updateCheckPromise`), but
+**not as a long-lived cache** — only so a check already in flight (e.g. the background check racing
+the panel being opened right at page load) is reused rather than duplicated. Two independent callers
+use it: a background check that fires once at load (adding a `.has-update` badge, a small dot via CSS
+`::after`, to `#btn-about` if a newer version exists, so the user doesn't have to think to open the
+panel to find out) and `openAboutModal()`'s own check when the panel is opened (populating
+`#about-update-status` with a link to the newer release, or "You have the latest version.").
+
+**Gotcha: `openAboutModal()` must reset `updateCheckPromise = null` before calling
+`getUpdateCheck()`, every time.** Without it, this is a real, shipped bug (found live in `v1.1.0`): a
+tab left open across a new release staying stuck reporting "you have the latest version" forever,
+because the *result* of the one-off background check from page load was being replayed on every
+subsequent panel open rather than re-checked. Opening the panel is a deliberate "check now" action
+from the user's point of view; it should never just hand back a possibly-hours-old cached answer.
+
+Opening the panel also clears the badge (`btn-about.classList.remove('has-update')`) immediately, on
+the theory that the user has now seen it regardless of whether the check has resolved yet. This is
+genuinely best-effort throughout: any failure (offline, blocked by CORS/an ad blocker, rate-limited,
+opened from a sandboxed/local context that blocks the request) is caught and resolves to `null` rather
+than showing an error or badge. Checking for updates is a "nice to know," not something the app
+depends on to function, and it must never block or break opening the About panel itself.
 
 ## Theming
 
