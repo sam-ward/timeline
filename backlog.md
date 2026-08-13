@@ -75,9 +75,10 @@ fixes to flow through the new release process rather than around it.
    section. (`.github/workflows/release.yml`)
 3. [x] Branch strategy: feature branches → PR → `main`, documented in
    `CONTRIBUTING.md`. Releases are cut by tagging `main`.
-4. [ ] GitHub branch protection on `main` (require PRs) — a repo setting,
-   not a code change; needs explicit go-ahead before being flipped since it
-   affects collaborators immediately.
+4. [x] GitHub branch protection on `main`: PRs required (admin bypass
+   allowed for standalone docs/backlog housekeeping only — see
+   `CONTRIBUTING.md`'s "Direct pushes to main"), force-pushes and branch
+   deletion blocked, no required review count.
 5. [x] GitHub link + About panel in the app header, showing current version
    and license, with a best-effort "newer version available" check against
    the GitHub Releases API.

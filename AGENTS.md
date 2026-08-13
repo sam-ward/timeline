@@ -57,7 +57,11 @@ Any change you make must preserve it.
 Doing local work (commits, branches, running tests) does not imply permission for anything
 outward-facing. Always confirm before:
 
-- `git push` of any branch, or opening a PR.
+- `git push` of any branch, opening a PR, or merging one.
+- Pushing directly to `main` — including the narrow admin-bypass case described in
+  `CONTRIBUTING.md`'s "Direct pushes to main." That section defines *what qualifies*; it is not
+  standing permission to do it without asking. Only use it for a change that actually matches the
+  standalone-housekeeping description there — if in doubt, use a branch + PR instead.
 - Tagging a release, or pushing a tag.
 - Changing a GitHub repo setting (branch protection, etc.).
 - Anything else other people would see or be affected by — this project already has other users.
