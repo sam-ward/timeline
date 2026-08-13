@@ -11,44 +11,9 @@ Changelog and remove from here once released).
 
 ## Bugs
 
-1. [x] Gantt "Today" button under-scrolls. **Fixed.** Was landing ~200px
-   before today's marker using a hardcoded offset that didn't account for
-   the sticky task-label column's actual width. Now computes the offset
-   from the real label column width instead of a magic number.
-2. [x] RAG status red vs. amber were too close in hue/lightness to tell
-   apart at a glance (`--danger:#B3412D` vs `--warn:#C7622A`, both muted
-   brick/rust tones). **Fixed.** New red is 24° of hue separation from
-   amber instead of 12°, plus higher saturation, updated across all four
-   theme locations (light, dark media query, dark data-theme, print).
-3. [x] Task edit modal: changing the RAG Status dropdown didn't update the
-   dot's color live, only visible after save + reopen. **Fixed**, following
-   the same reactive-refresh pattern as the existing
-   `refreshMilestoneUI()`/`refreshStartLock()` functions.
-4. [x] Arrow-key increment/decrement on date/duration fields only
-   registered one keypress before losing focus. **Fixed.** Root cause:
-   arrow-key stepping fires `change` while the field is still focused, and
-   the full-table rebuild that `change` triggers destroyed the still-focused
-   input. Now refocuses the freshly-rendered replacement, but only when the
-   field was still focused at commit time, so tabbing/clicking away still
-   works normally.
-5. [x] Date field usability: selecting a date field's text (3–4 clicks to
-   select-all) left the text visually highlighted after clicking away, until
-   focusing another text/date field. **Fixed.** First attempt to reproduce
-   (blurring by clicking into another text field) didn't show it; turned
-   out that's specifically the one thing that *does* clear it, per the
-   user's own repro steps. Re-tested blurring onto a non-field area instead
-   and reproduced it immediately, screenshot-confirmed: DOM state
-   (`document.activeElement`, `selectionStart`/`End`) is correctly cleared
-   the instant focus moves away, but the browser doesn't repaint that field.
-   The stale "selected" highlight stays visibly painted until something
-   else forces a repaint nearby (e.g. focusing a different field). A
-   genuine stale-paint bug in the browser's rendering of native form
-   controls, confirmed by the user on both Chrome and Firefox, both Windows
-   and Linux. Generic repaint nudges (toggling opacity/transform/display/
-   disabled) did not clear it; what did: momentarily clearing and restoring
-   the field's own `.value` on blur, which forces the control to fully
-   redraw its internal text representation. See the "INPUT BLUR REPAINT
-   WORKAROUND" section in the script for the fix and reasoning.
+None currently open. The last batch (Gantt "Today" scroll, RAG red/amber
+contrast, live status dot, arrow-key focus loss, stale selection-highlight
+repaint) shipped in `v1.0.1`; see `CHANGELOG.md` for details.
 
 ## Improvements
 
