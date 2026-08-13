@@ -19,8 +19,8 @@
   --line-strong:#C6CBD2;
   --text:#23272E;
   --text-mute:#6B7280;
-  --danger:#B3412D;
-  --danger-light:#F7E2DD;
+  --danger:#CE222A;
+  --danger-light:#FBE0E1;
   /* gantt & chrome colors that used to be hardcoded hex values — kept as variables so a theme
      only needs to override them once, here, rather than hunting through every rule */
   --header-bg:#F6F7F8;
@@ -56,8 +56,8 @@
     --line-strong:#3D4650;
     --text:#E4E7EB;
     --text-mute:#8992A0;
-    --danger:#E0705A;
-    --danger-light:#3A211C;
+    --danger:#EB5C63;
+    --danger-light:#3F1C1E;
     --header-bg:#20262D;
     --summary-bg:#242B32;
     --weekend-bg:#1A1F25;
@@ -84,8 +84,8 @@
   --line-strong:#3D4650;
   --text:#E4E7EB;
   --text-mute:#8992A0;
-  --danger:#E0705A;
-  --danger-light:#3A211C;
+  --danger:#EB5C63;
+  --danger-light:#3F1C1E;
   --header-bg:#20262D;
   --summary-bg:#242B32;
   --weekend-bg:#1A1F25;
@@ -667,6 +667,34 @@ function markDirty(){ dirty = true; updateTitleBar(); }
 function todayISO(){ return toISO(new Date()); }
 
 /* =========================================================================
+   INPUT BLUR REPAINT WORKAROUND
+   ========================================================================= */
+// Confirmed on both Chrome and Firefox, on both Windows and Linux: after selecting text in a
+// date/text field (e.g. triple-click to select the whole value, as you'd do before copying it)
+// and then clicking somewhere that isn't itself a text/date field, the field's underlying DOM
+// state is correctly cleared immediately (document.activeElement moves on, selectionStart/End
+// reset) — but the browser doesn't actually repaint that field, so the old "selected" highlight
+// stays visibly painted on screen until something else forces a repaint nearby (e.g. focusing a
+// different field). It's a stale-paint bug in the browser's rendering of the native control, not
+// a bug in this app's focus/selection handling — but it reads as broken either way.
+//
+// Generic repaint nudges (toggling opacity/transform/display/disabled) did NOT clear it in
+// testing — the native control's selection highlight appears to live in its own paint/compositing
+// layer that those don't invalidate. What does work: momentarily clearing and restoring the
+// field's own value, which forces the control to fully redraw its internal text representation
+// from scratch. Setting .value programmatically never fires input/change, so this is a no-op from
+// the app's data-flow point of view. Deliberately scoped to text-like inputs only (excludes
+// checkboxes/radios, which don't have this visual — and excludes <select>, where reassigning
+// .value to '' would risk a visible flash of "nothing selected" before it's restored).
+document.addEventListener('blur', (e)=>{
+  const el = e.target;
+  if(!el || !el.matches || !el.matches('input:not([type="checkbox"]):not([type="radio"]), textarea')) return;
+  const v = el.value;
+  el.value = '';
+  el.value = v;
+}, true); // 'blur' doesn't bubble, so this listener must run in the capture phase to see it at all
+
+/* =========================================================================
    HOVER TOOLTIP  (generic, reused by task-list deps chip and gantt bars/icons)
    ========================================================================= */
 const tooltipEl = document.getElementById('hover-tooltip');
@@ -1078,7 +1106,7 @@ function printGanttChart(){
       --line:#DDE1E6; --line-strong:#C6CBD2; --text:#23272E; --text-mute:#6B7280;
       --header-bg:#F6F7F8; --summary-bg:#F3F5F6; --weekend-bg:#EFF1F3;
       --bar-bg:#CFE0DB; --bar-border:#AFC7BF; --bar-label-color:#173028; --bar-label-shadow:rgba(255,255,255,.4);
-      --parent-bar-bg:#D9DEE3; --parent-bar-fill:#5B6A7C; --danger:#B3412D;
+      --parent-bar-bg:#D9DEE3; --parent-bar-fill:#5B6A7C; --danger:#CE222A;
       --font-ui: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
       --font-mono: ui-monospace, "SF Mono", "Cascadia Mono", "Consolas", monospace;
     }
@@ -1943,10 +1971,22 @@ document.getElementById('task-tbody').addEventListener('change', (e)=>{
   else if(field==='manualEnd') t.manualEnd = input.checked;
   else return;
 
+  // Arrow-key stepping (or clicking the native spinner) on a date/number field fires 'change'
+  // without blurring — the field is still focused when we get here. A real edit committed by
+  // tabbing/clicking away, on the other hand, has already moved focus elsewhere by this point.
+  // Only refocus in the former case: doing it unconditionally would trap someone who deliberately
+  // moved on to the next field right back in the cell they just left.
+  const stillFocused = document.activeElement === input;
+  const taskId = t.id, fieldName = field;
+
   markDirty();
   setTimeout(()=>{
     recalcAll();
     renderAll();
+    if(stillFocused){
+      const fresh = document.querySelector(`tr[data-id="${taskId}"] [data-field="${fieldName}"]`);
+      if(fresh) fresh.focus();
+    }
   }, 0);
 });
 
@@ -2082,7 +2122,7 @@ function openTaskEditModal(taskId){
     return `<div class="field" style="flex:1;">
         <label>Status</label>
         <div class="status-select-wrap">
-          ${statusDotHtml(t.status)}
+          <span id="te-status-dot">${statusDotHtml(t.status)}</span>
           <select class="status-select" id="te-status">
             <option value="" ${!val?'selected':''}>None</option>
             <option value="green" ${val==='green'?'selected':''}>Green</option>
@@ -2195,6 +2235,13 @@ function openTaskEditModal(taskId){
       refreshMilestoneUI();
     });
   }
+
+  // --- reactive: the Status dropdown's dot recolors immediately, not just after save + reopen ---
+  function refreshStatusUI(){
+    const dotWrap = document.getElementById('te-status-dot');
+    if(dotWrap) dotWrap.innerHTML = statusDotHtml(sanitizeStatus(document.getElementById('te-status').value));
+  }
+  document.getElementById('te-status').addEventListener('change', refreshStatusUI);
 
   function readPct(){
     const doneCb = document.getElementById('te-pct-done');
@@ -2441,7 +2488,17 @@ document.getElementById('zoom-out').addEventListener('click', ()=>{ dayWidth = M
 document.getElementById('btn-today').addEventListener('click', ()=>{
   const scroll = document.getElementById('gantt-scroll');
   const bar = document.querySelector('.today-line');
-  if(bar) scroll.scrollLeft = parseFloat(bar.style.left) - 200;
+  if(!bar) return;
+  // bar.style.left is today's position in the full (unscrolled) content coordinate
+  // space, which already has the sticky label column's width (LABEL_W) baked into it.
+  // The visible timeline area only starts at scrollLeft + LABEL_W (the label column
+  // stays pinned there via position:sticky), so LABEL_W has to be subtracted back out
+  // — otherwise "today" lands LABEL_W too far right and ends up hidden behind the
+  // label column instead of just past it.
+  const todayLeft = parseFloat(bar.style.left);
+  const visibleTimelineWidth = Math.max(0, scroll.clientWidth - LABEL_W);
+  const leadIn = Math.min(150, visibleTimelineWidth / 3); // a bit of context before "today"
+  scroll.scrollLeft = Math.max(0, todayLeft - LABEL_W - leadIn);
 });
 
 /* =========================================================================

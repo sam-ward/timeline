@@ -343,6 +343,44 @@ If you're debugging what looks like a stale/incorrect visual on an input and the
 already correct, this workaround (or the lack of an equivalent one on a new kind of control) is worth
 checking before assuming it's a data bug.
 
+**Gotcha the pattern above doesn't fully cover: arrow-key stepping.** Committing on `change` avoids
+the typing/focus-stealing problem, but `change` doesn't only fire on blur. Arrow-key stepping (or
+clicking the native spinner) on a `date`/`number` input fires `change` *while the field is still
+focused*. The `#task-tbody` `change` handler's full-table rebuild (`recalcAll()` + `renderAll()`,
+deferred via `setTimeout`) destroys and replaces that still-focused input, so a second arrow press has
+nothing to land on. A real bug, fixed by capturing `document.activeElement === input` right before the
+rebuild and, only if true, refocusing the freshly-rendered replacement afterward. Critically, this must
+stay conditional: if the field had already lost focus (a real tab-away/click-elsewhere commit),
+refocusing it back would trap the user in a cell they deliberately left. If you add a new field to this
+handler that uses a `date`/`number` input, follow the same `stillFocused` capture-and-conditionally-
+refocus pattern, not just "commit on change."
+
+### Input blur repaint workaround (native browser bug, not app logic)
+
+A single document-level, capture-phase `'blur'` listener (`blur` doesn't bubble, hence capture; see
+the `INPUT BLUR REPAINT WORKAROUND` section near the top of the script) works around a real browser
+rendering bug, confirmed on both Chrome and Firefox, on both Windows and Linux: after selecting text in
+a date/text field (e.g. triple-click to select the whole value, the natural way to copy one) and then
+clicking somewhere that isn't itself a text/date field, the field's underlying DOM state is correctly
+cleared immediately (`document.activeElement` moves on, `selectionStart`/`selectionEnd` reset to
+`null`), but the browser doesn't repaint the field, so the old "selected" highlight stays visibly
+painted on screen until something else forces a repaint nearby (e.g. focusing a different field).
+Confirmed via a real headless-Chromium screenshot: DOM state clean, pixels stale.
+
+Several generic repaint nudges were tried and screenshotted before finding one that actually works.
+Toggling `opacity`, `transform`, `display`, and `disabled` all failed to clear it, which suggests the
+native control's selection highlight lives in its own paint/compositing layer that those don't
+invalidate. What does work: momentarily clearing and restoring the field's own `.value`, which forces
+the control to fully redraw its internal text representation from scratch. Programmatic `.value`
+assignment never fires `input`/`change`, so this has no effect on the app's own data flow. The listener
+is deliberately scoped to text-like inputs only. It skips checkboxes/radios (no such visual exists for
+them) and `<select>` (reassigning its value to `''` would risk a visible flash of "nothing selected"
+before being restored).
+
+If you're debugging what looks like a stale/incorrect visual on an input and the underlying state is
+already correct, this workaround (or the lack of an equivalent one on a new kind of control) is worth
+checking before assuming it's a data bug.
+
 ### Two Gantt renderers, one shared geometry function
 
 There are two independent Gantt renderers, and it's worth understanding why:
