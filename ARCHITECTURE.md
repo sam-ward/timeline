@@ -456,6 +456,13 @@ it:
 
 ## Common tasks for future changes
 
+**Whenever you add, change, or remove a feature covered below** (a new Task field, a new view, a
+new export format, a new visual state), also update `examples/verification-schedule.json` — a
+hand-built schedule that exercises every major feature and visual state in one file, meant to be
+opened after a change to manually eyeball it across all three views. See `examples/README.md` for
+what it currently covers. Treat it the same as the checklists below: if a checklist item applies,
+the fixture should demonstrate it too, so it doesn't quietly go stale as a verification aid.
+
 **Adding a new field to the Task schema:**
 1. Add it to the object literal in `normalizeTask()` with a sensible default (this is what makes
    older saved files still load correctly).
