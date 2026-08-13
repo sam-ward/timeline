@@ -51,8 +51,11 @@ repaint) shipped in `v1.0.1`; see `CHANGELOG.md` for details.
    Parked pending a decision on which of these is actually wanted (most
    likely same-day sequencing is the real ask, but that's the expensive one
    to build) before any implementation starts.
-3. [ ] Drag-and-drop a `.json` schedule file onto the already-open window to
-   open it (in addition to the existing Open button/file picker).
+3. [x] Drag-and-drop a `.json` schedule file onto the already-open window to
+   open it. Feeds into the same `loadFromText()` path as the Open
+   button/file picker, plus a full-window drop overlay for feedback while
+   dragging. In progress on `feature/improvements-batch`, not yet merged;
+   see `CHANGELOG.md`'s `[Unreleased]` section.
 4. [ ] Dashboard: separate "upcoming tasks" from "upcoming milestones" in the
    relevant bucket, rather than listing them together. (Tentative, worth
    confirming the exact desired grouping before building.)

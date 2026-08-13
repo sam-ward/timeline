@@ -528,7 +528,19 @@ it:
 - `loadFromText(text)` parses and validates a JSON file, runs every task through `normalizeTask()`
   (which fills in defaults for any missing/malformed field, important for forward-compatibility if
   you add new fields later), then calls `recalcAll()` to self-heal anything that's drifted out of a
-  valid state (circular deps, resource casing, stale milestone resources) before rendering.
+  valid state (circular deps, resource casing, stale milestone resources) before rendering. It's the
+  single entry point all three ways of opening a file funnel through: the file picker
+  (`showOpenFilePicker`), the fallback `<input type="file">`, and drag-and-drop.
+- **Drag-and-drop** a `.json` file onto the window is a fourth on-ramp to the same `loadFromText()`
+  path, not a separate load mechanism. `window`-level `dragenter`/`dragover`/`dragleave`/`drop`
+  listeners `preventDefault()` on every stage (otherwise the browser navigates to the dropped file
+  instead of firing `drop`), guarded by `isFileDrag()` so a drag that isn't carrying files doesn't
+  trigger anything. `dragDepth` is a counter, not a boolean, because `dragenter`/`dragleave` fire
+  once per child element the pointer crosses while dragging over the page, not once for the whole
+  window: a boolean flickers the overlay on and off as the drag crosses element boundaries; the
+  counter only hides it once it's genuinely left. The full-screen `#drop-overlay` has
+  `pointer-events:none` so it never itself becomes a drag target and doesn't interfere with the
+  window-level listeners underneath it.
 
 ## Common tasks for future changes
 

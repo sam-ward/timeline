@@ -14,6 +14,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
   visible indication it existed. Only shown on editable (unlocked) date
   fields, since locked ones are `disabled` and can't be focused to use
   the shortcut at all.
+- Drag a `.json` schedule file onto the window to open it, alongside the
+  existing Open button/file picker.
 
 ## [1.0.1] - 2026-08-13
 
