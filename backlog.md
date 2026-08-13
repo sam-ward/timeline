@@ -9,30 +9,28 @@ are for).
 Status legend: `[ ]` not started · `[~]` in progress · `[x]` done (move to
 Changelog and remove from here once released).
 
-## In progress
-
-- Infra track (see "Broader / process" below) is done except for GitHub
-  branch protection on `main`, which is still open pending a go-ahead.
-  `v1.0.0` is tagged and released.
-
 ## Bugs
 
-1. [ ] Gantt "Today" button under-scrolls. Lands ~200px before today's
-   marker using a hardcoded offset, which doesn't account for the sticky
-   task-label column's actual width, so "today" ends up hidden behind it on
-   wider label columns. Fix: use the real label column width, not a magic
-   number.
-2. [ ] RAG status red vs. amber are too close in hue/lightness to tell apart
-   at a glance (`--danger:#B3412D` vs `--warn:#C7622A`, both muted
-   brick/rust tones). Need a visibly redder red.
-3. [ ] Task edit modal: changing the RAG Status dropdown doesn't update the
-   dot's color live, only visible after save + reopen. Same class of bug as
-   the documented `refreshMilestoneUI()` pattern (modal not reflecting live
-   form state); needs an equivalent `refreshStatusUI()`-style fix.
-4. [ ] Arrow-key increment/decrement on date/duration fields only registers
-   one keypress before losing focus. Likely candidate: browser fires
-   `change` per arrow-key step, colliding with the full-table-rerender /
-   blur-commit handling. Needs investigation before scoping the fix.
+1. [x] Gantt "Today" button under-scrolls. **Fixed.** Was landing ~200px
+   before today's marker using a hardcoded offset that didn't account for
+   the sticky task-label column's actual width. Now computes the offset
+   from the real label column width instead of a magic number.
+2. [x] RAG status red vs. amber were too close in hue/lightness to tell
+   apart at a glance (`--danger:#B3412D` vs `--warn:#C7622A`, both muted
+   brick/rust tones). **Fixed.** New red is 24° of hue separation from
+   amber instead of 12°, plus higher saturation, updated across all four
+   theme locations (light, dark media query, dark data-theme, print).
+3. [x] Task edit modal: changing the RAG Status dropdown didn't update the
+   dot's color live, only visible after save + reopen. **Fixed**, following
+   the same reactive-refresh pattern as the existing
+   `refreshMilestoneUI()`/`refreshStartLock()` functions.
+4. [x] Arrow-key increment/decrement on date/duration fields only
+   registered one keypress before losing focus. **Fixed.** Root cause:
+   arrow-key stepping fires `change` while the field is still focused, and
+   the full-table rebuild that `change` triggers destroyed the still-focused
+   input. Now refocuses the freshly-rendered replacement, but only when the
+   field was still focused at commit time, so tabbing/clicking away still
+   works normally.
 5. [x] Date field usability: selecting a date field's text (3–4 clicks to
    select-all) left the text visually highlighted after clicking away, until
    focusing another text/date field. **Fixed.** First attempt to reproduce
