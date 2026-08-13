@@ -1,0 +1,78 @@
+name: Release
+
+# Cutting a release: bump APP_VERSION in timeline-schedule-tool.html and add
+# a dated section to CHANGELOG.md on main (via a normal feature-branch PR,
+# see CONTRIBUTING.md), then tag main and push the tag:
+#
+#   git tag v1.2.3
+#   git push origin v1.2.3
+#
+# This workflow does the rest: verifies the tag matches the version baked
+# into the HTML file, pulls that version's notes out of CHANGELOG.md, and
+# publishes a GitHub Release with both the bare HTML file and a zip of the
+# repo attached.
+
+on:
+  push:
+    tags:
+      - "v*.*.*"
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Derive version from tag
+        id: ver
+        run: |
+          TAG="${GITHUB_REF#refs/tags/}"
+          VERSION="${TAG#v}"
+          echo "tag=$TAG" >> "$GITHUB_OUTPUT"
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+
+      - name: Verify HTML version matches the tag
+        run: |
+          EXPECTED='const APP_VERSION = "${{ steps.ver.outputs.version }}";'
+          if ! grep -qF "$EXPECTED" timeline-schedule-tool.html; then
+            echo "::error::timeline-schedule-tool.html's APP_VERSION does not match tag ${{ steps.ver.outputs.tag }}."
+            echo "Expected to find: $EXPECTED"
+            exit 1
+          fi
+
+      - name: Extract changelog section for this version
+        id: notes
+        run: |
+          awk -v ver="${{ steps.ver.outputs.version }}" '
+            BEGIN { found=0 }
+            /^## \[/ {
+              if (found) exit
+              if ($0 ~ "\\[" ver "\\]") { found=1; next }
+            }
+            found { print }
+          ' CHANGELOG.md > release-notes.md
+          if [ ! -s release-notes.md ]; then
+            echo "::error::No CHANGELOG.md section found for [${{ steps.ver.outputs.version }}]."
+            exit 1
+          fi
+
+      - name: Build repo zip
+        run: |
+          mkdir -p dist
+          git archive --format=zip --prefix="timeline-${{ steps.ver.outputs.tag }}/" \
+            -o "dist/timeline-${{ steps.ver.outputs.tag }}.zip" HEAD
+          cp timeline-schedule-tool.html "dist/timeline-schedule-tool.html"
+
+      - name: Create GitHub Release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release create "${{ steps.ver.outputs.tag }}" \
+            --title "${{ steps.ver.outputs.tag }}" \
+            --notes-file release-notes.md \
+            "dist/timeline-schedule-tool.html" \
+            "dist/timeline-${{ steps.ver.outputs.tag }}.zip"
