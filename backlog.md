@@ -17,10 +17,11 @@ repaint) shipped in `v1.0.1`; see `CHANGELOG.md` for details.
 
 ## Improvements
 
-1. [ ] Copy/paste for dates already exists (Ctrl/Cmd+C/V on a focused date
-   field) but isn't discoverable; user didn't know it was there. Consider a
-   hint/tooltip, or otherwise surfacing it. In progress on
-   `feature/date-copy-paste-tooltip`, not yet merged.
+1. [x] Copy/paste for dates already exists (Ctrl/Cmd+C/V on a focused date
+   field) but isn't discoverable. Fixed with a hover tooltip on the Task
+   List's date fields explaining the shortcut. Table only, not the edit
+   modal's date fields (which don't have the shortcut wired up); see
+   `CHANGELOG.md`'s `[Unreleased]` section.
 2. [ ] **Needs a design discussion before any code.** Support durations
    smaller than 1 working day (e.g. half-days). Looked into the scope: the
    whole scheduling model is date-only, not date-time (`parseISO` discards
