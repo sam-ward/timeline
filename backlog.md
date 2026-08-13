@@ -11,9 +11,18 @@ Changelog and remove from here once released).
 
 ## Bugs
 
-None currently open. The last batch (Gantt "Today" scroll, RAG red/amber
-contrast, live status dot, arrow-key focus loss, stale selection-highlight
-repaint) shipped in `v1.0.1`; see `CHANGELOG.md` for details.
+1. [x] Deps popover (and the Dashboard resource-filter popover) could render
+   partly off the right edge of the window, forcing a horizontal scrollbar.
+   Found while starting the dependency-lag work below. Root cause: the
+   on-screen clamp used a guessed 260px instead of the popover's real CSS
+   `max-width:300px`. Fixed with a shared `popoverLeftClamp()` using the
+   real value, plus slightly narrower Start/End/% Done columns for more
+   breathing room. In progress on `feature/dependency-lag`, not yet merged;
+   see `CHANGELOG.md`'s `[Unreleased]` section.
+
+The previous batch (Gantt "Today" scroll, RAG red/amber contrast, live
+status dot, arrow-key focus loss, stale selection-highlight repaint)
+shipped in `v1.0.1`; see `CHANGELOG.md` for details.
 
 ## Improvements
 

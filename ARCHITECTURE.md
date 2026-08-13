@@ -446,6 +446,19 @@ rebuilds its entire DOM (and loses the filter text) every time a checkbox is tog
 `openDepsPopover()` calls itself again to refresh. This is a pre-existing, purposeful simplicity
 trade-off, not an oversight.
 
+**Gotcha: popover horizontal clamping must match the real CSS max-width, not an approximation.**
+`openDepsPopover()` and `openResourceFilterPopover()` (Dashboard) both position a floating
+`.popover` via `popoverLeftClamp(rect)`, which clamps the left edge so the box can never render
+past the right edge of the viewport. This used to be a bare `Math.min(rect.left, window.innerWidth
+- 260)` inlined at each call site — 260 was a guess, not the actual `.popover` CSS rule's
+`max-width:300px`, and deps rows commonly push the popover to that real 300px ceiling. The result:
+the popover's right edge could sit up to 40px past the viewport, forcing a horizontal scrollbar,
+worst when the anchor button (e.g. the Deps chip, near the right end of the Task List row) was
+already close to the window edge. Fixed by centralizing the clamp in one function that references
+`POPOVER_MAX_WIDTH` (kept in sync with the CSS by comment, since there's no way to read a CSS rule's
+value back into JS without adding a runtime measurement step) instead of a second, silently-drifting
+guess. If you widen `.popover`'s `max-width` in CSS, update `POPOVER_MAX_WIDTH` in the same change.
+
 ### Copy/paste for date fields
 
 `<input type="date">` doesn't support reliable cross-browser copy/paste on its own (locale-formatted

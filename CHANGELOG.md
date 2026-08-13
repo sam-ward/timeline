@@ -22,6 +22,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
   on load and shows a small orange dot if one's available, instead of
   only surfacing that after opening the About panel.
 
+### Fixed
+
+- The Task List's dependency picker (and the Dashboard's resource filter)
+  could render partially off the right edge of the window, forcing a
+  horizontal scrollbar. The clamp keeping these popovers on-screen used a
+  guessed width instead of the popover's real CSS max-width.
+- Task List: Start, End, and % Done columns are a little narrower, giving
+  the Deps popover more room to open without needing to clamp at all.
+
 ## [1.0.1] - 2026-08-13
 
 ### Fixed

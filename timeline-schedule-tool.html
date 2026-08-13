@@ -271,7 +271,7 @@ table#task-table{
 #task-table td{
   border-bottom:1px solid var(--line);
   border-right:1px solid var(--line);
-  padding:3px 6px;
+  padding:3px 5px;
   vertical-align:middle;
   white-space:nowrap;
 }
@@ -311,18 +311,18 @@ table#task-table{
   color:var(--text-mute); font-size:10px; cursor:pointer; padding:0;
 }
 .name-input{font-weight:inherit;}
-input.date-input{width:118px; font-family:var(--font-mono); font-size:11.5px;}
+input.date-input{width:106px; font-family:var(--font-mono); font-size:11.5px;}
 input.date-input.date-copied-flash{background:var(--accent-light); transition:background .1s;}
 input.dur-input{width:36px; font-family:var(--font-mono); text-align:right; -moz-appearance:textfield;}
 input.dur-input::-webkit-outer-spin-button, input.dur-input::-webkit-inner-spin-button{ -webkit-appearance:none; margin:0; }
 input.dur-input:focus::-webkit-outer-spin-button, input.dur-input:focus::-webkit-inner-spin-button{ -webkit-appearance:auto; margin:revert; }
-input.pct-input{width:44px; font-family:var(--font-mono); text-align:right; -moz-appearance:textfield;}
+input.pct-input{width:38px; font-family:var(--font-mono); text-align:right; -moz-appearance:textfield;}
 input.pct-input::-webkit-outer-spin-button, input.pct-input::-webkit-inner-spin-button{ -webkit-appearance:none; margin:0; }
 input.pct-input:focus::-webkit-outer-spin-button, input.pct-input:focus::-webkit-inner-spin-button{ -webkit-appearance:auto; margin:revert; }
 input.res-input{width:100%; min-width:100px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;}
 .pct-cell{display:flex; align-items:center; gap:3px;}
 .pct-suffix{color:var(--text-mute); font-family:var(--font-mono); font-size:11px; flex:none;}
-.pct-bar{width:44px; height:6px; background:var(--line); border-radius:3px; overflow:hidden; flex:none; margin-left:3px;}
+.pct-bar{width:32px; height:6px; background:var(--line); border-radius:3px; overflow:hidden; flex:none; margin-left:3px;}
 .pct-bar > i{display:block; height:100%; background:var(--accent);}
 .row-actions{display:flex; gap:3px;}
 .icon-btn{
@@ -2046,6 +2046,17 @@ document.getElementById('btn-add-task').addEventListener('click', ()=>addTask(nu
    ========================================================================= */
 function closePopover(){ document.getElementById('popover-root').innerHTML = ''; }
 
+// Clamps a popover's left edge so it can never render past the right edge of the viewport.
+// Must be measured against the .popover CSS rule's actual max-width (300px, see the "Popover"
+// section of <style>), not an approximation — a previous version of this hardcoded 260px here,
+// which under-corrected by 40px (popovers commonly render at or near the real 300px ceiling) and
+// let the popover's right edge spill past the viewport, forcing a horizontal scrollbar.
+const POPOVER_MAX_WIDTH = 300;
+function popoverLeftClamp(rect){
+  const left = Math.min(rect.left + window.scrollX, window.innerWidth - POPOVER_MAX_WIDTH - 8);
+  return Math.max(8, left);
+}
+
 function openDepsPopover(anchorBtn, taskId){
   const root = document.getElementById('popover-root');
   const t = byId(taskId);
@@ -2058,7 +2069,7 @@ function openDepsPopover(anchorBtn, taskId){
     return `<label class="pop-row" data-filter-text="${escapeAttr(displayName(ot).toLowerCase())}"><input type="checkbox" value="${id}" ${checked?'checked':''}> <span class="dep-name" style="padding-left:${indent}px;">${escapeHtml(displayName(ot))}</span><span class="dep-date">${fmtDate(ot.end)}</span></label>`;
   }).join('') : `<div class="pop-empty">No other tasks available yet.</div>`;
 
-  root.innerHTML = `<div class="popover" style="top:${rect.bottom+window.scrollY+4}px; left:${Math.min(rect.left+window.scrollX, window.innerWidth-260)}px;">
+  root.innerHTML = `<div class="popover" style="top:${rect.bottom+window.scrollY+4}px; left:${popoverLeftClamp(rect)}px;">
       <h4>Depends on (finish → start)</h4>
       ${options.length>4?'<input type="text" class="popover-filter" placeholder="Filter tasks...">':''}
       <div class="popover-rows">${rowsHtml}</div>
@@ -2718,7 +2729,7 @@ function openResourceFilterPopover(anchorBtn){
     return `<label class="pop-row"><input type="checkbox" value="${escapeAttr(r)}" ${checked?'checked':''}> ${escapeHtml(r)}</label>`;
   }).join('') : `<div class="pop-empty">No resources assigned to any task yet.</div>`;
 
-  root.innerHTML = `<div class="popover" style="top:${rect.bottom+window.scrollY+4}px; left:${Math.min(rect.left+window.scrollX, window.innerWidth-260)}px;">
+  root.innerHTML = `<div class="popover" style="top:${rect.bottom+window.scrollY+4}px; left:${popoverLeftClamp(rect)}px;">
       <h4>Filter by resource</h4>
       <div class="popover-rows">${rowsHtml}</div>
       ${resources.length?`<div style="display:flex; gap:6px; margin-top:8px; padding-top:8px; border-top:1px solid var(--line);">
