@@ -29,7 +29,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
   dependency, then click its date (or, once a lag is set, the small
   badge next to it) to reveal a +/- stepper in place. A lag of 0
   (the default, and what every existing dependency has) behaves exactly
-  as before.
+  as before. The Task List's Deps chip now shows a small "±" flag
+  whenever a lag is affecting a task's scheduled start, since it was
+  otherwise only visible by hovering the chip or opening the picker.
 
 ### Fixed
 
@@ -39,6 +41,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
   guessed width instead of the popover's real CSS max-width.
 - Task List: Start, End, and % Done columns are a little narrower, giving
   the Deps popover more room to open without needing to clamp at all.
+- Dependency picker (Task List popover and task edit modal): once there
+  were enough candidates to scroll, the scrollbar could overlap the last
+  couple of digits of the right-aligned date text. Both lists now reserve
+  padding for it.
 
 ## [1.0.1] - 2026-08-13
 

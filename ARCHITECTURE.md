@@ -282,6 +282,26 @@ event *wiring* isn't shared even though the markup is:
   `"id:lag"` pairs) so a lag-only edit is correctly caught as a change worth confirming before
   discard.
 
+**A lagged dependency needs to be visible from the Task List row itself, not just inside the
+popover.** The Deps chip (`data-act="deps"`) gets a small `±` flag (`.chip-lag-flag`) appended to
+its label whenever any of the task's predecessors has a non-zero `lag` — found missing during
+manual testing: the chip's existing hover tooltip (`buildDepsTooltipHtml()`) already listed the
+exact lag per predecessor, but there was nothing to prompt a user to hover in the first place. The
+flag itself carries no number (a task can have several predecessors with different lags); it's
+purely a "look closer" signal, with the tooltip staying the source of the actual values.
+
+**Gotcha: a scrolling `.popover-rows`/`#te-dep-rows` needs padding-right reserved for the
+scrollbar, not just visual padding.** Once there are enough candidates to overflow the `max-height`
+and force a scrollbar, a classic (non-overlay) scrollbar draws directly on top of the last couple of
+characters in the right-aligned `.dep-date` text, since nothing was reserving space for it — the
+row's flex layout naturally pushes that text flush to the container's right edge. Fixed with a fixed
+`padding-right` (not `scrollbar-gutter: stable`, whose Safari support is recent/inconsistent) on
+both `.popover-rows` and the modal's `#te-dep-rows`. Couldn't be verified pixel-for-pixel against a
+real classic scrollbar in this project's own dev sandbox, which renders 0-width overlay scrollbars
+regardless of `scrollbar-width`/`::-webkit-scrollbar` CSS — the fix is correct by construction
+(padding reserves clearance unconditionally) rather than screenshot-verified; flag for a real check
+on Windows/Linux Chrome or Firefox if this needs revisiting.
+
 ### Why can't a task depend on its own ancestor?
 
 If a task depends on one of its own parents (directly or transitively), you get a genuine circular

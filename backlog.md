@@ -94,6 +94,18 @@ shipped in `v1.0.1`; see `CHANGELOG.md` for details.
    progress on `feature/dependency-lag`, not yet merged; see
    `CHANGELOG.md`'s `[Unreleased]` section.
 
+   Two follow-up fixes found during manual testing of this feature, both
+   also on `feature/dependency-lag`:
+   - The Task List had no way to tell a lag was affecting a task's start
+     without hovering the Deps chip or opening the picker. Added a small
+     "±" flag to the chip whenever a lag is active.
+   - The dependency picker's scrollbar (once there are enough candidates
+     to scroll) could overlap the last couple of digits of the date text.
+     Both the popover and the modal's list now reserve padding for it —
+     not independently pixel-verified against a real classic scrollbar,
+     since this project's dev sandbox only renders 0-width overlay
+     scrollbars; worth a real check on Windows/Linux Chrome or Firefox.
+
 ## Broader / process (tackling first)
 
 Being done first, before the bug/feature work above, because there are
