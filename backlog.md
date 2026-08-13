@@ -38,6 +38,20 @@ Changelog and remove from here once released).
    leaving edit mode. Browser text-selection state bleeding into the app's
    own edit-mode visuals. (Surfaced while discussing copy/paste for dates,
    below.)
+   **Investigated, not reproduced** — tried the described gesture (click,
+   double-click, triple-click, then Ctrl/Cmd+A on a Task List Start field,
+   then clicking a different cell to blur it) in a real headless-Chromium
+   pass. The selection highlight is fully visible while focused and clears
+   completely on blur; no lingering highlight. Two things make this look
+   like a browser/OS-specific rendering quirk rather than app code: the
+   Task List's date cells are always a plain `<input type="date">` (no
+   separate view/edit-mode toggle to "leave"), and native date-input
+   segment-selection rendering is internal browser chrome mostly outside
+   CSS/JS reach — there's no app-level selection-handling code that could
+   have caused this. Safari is known to leave an "inactive selection"
+   visible after blur where Chrome clears it, which would fit. Need the
+   browser/OS it was seen on, and whether it was the Task List row or the
+   task edit modal's date field, before this can be pinned down further.
 
 ## Improvements
 
