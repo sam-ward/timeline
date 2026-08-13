@@ -94,7 +94,7 @@ state = {
   manualEnd: false,            // if true, `end` is user-set and duration is derived instead
   percentComplete: 60,         // 0-100
   status: "green",             // "green" | "amber" | "red" | null, see Status below
-  predecessors: ["t9x8y7z"],   // array of task ids this task depends on (finish-to-start)
+  predecessors: [{id: "t9x8y7z", lag: 0}], // finish-to-start deps + lag/lead, see "Dependency lag" below
   parentId: null,              // task id, or null for a top-level task
   collapsed: false             // Task List / Gantt UI state: whether children are hidden
 }
@@ -178,10 +178,11 @@ This is the most important function in the codebase. Everything that changes a t
    - `clearMilestoneResources()`: any milestone's `resources` array gets forced to `[]`.
 
 2. **Iterate to a fixed point** (capped at 12 passes; real schedules converge in 1-3):
-   - For every **leaf** task (no children): compute `start` from its predecessors' latest `end` (+1
-     working day) if it has any, else leave `start` as-is; then compute `end` from `start + duration`
-     via `addWorkingDays()`, or, if `manualEnd` is set, derive `duration` from the `start`/`end`
-     range instead via `countWorkingDays()`.
+   - For every **leaf** task (no children): compute `start` from its predecessors' latest resulting
+     candidate date (`earliestStartFromPredecessors()` — predecessor's `end` + 1 working day + that
+     edge's own `lag`, see "Dependency lag" below) if it has any predecessors, else leave `start`
+     as-is; then compute `end` from `start + duration` via `addWorkingDays()`, or, if `manualEnd` is
+     set, derive `duration` from the `start`/`end` range instead via `countWorkingDays()`.
    - For every **parent** task (deepest first): roll up `start`/`end`/`percentComplete`/`resources`
      from its children.
    - Repeat until nothing changed in a full pass.
@@ -205,6 +206,119 @@ handles all of that uniformly, at the cost of (bounded, cheap) repeated passes.
   missing value falls back to `1`, not `0`; clearing a field shouldn't accidentally create a
   milestone.
 
+### Dependency lag
+
+A dependency means "must finish before," which is a different thing from "must start immediately
+after" — a task might logically depend on another finishing, but not actually be able to start the
+very next working day for reasons that have nothing to do with the task graph itself (an external
+vendor, a permit, staff availability). Before this feature, the two were conflated: any predecessor
+forced a start of exactly "predecessor's end + 1 working day," with no way to express a gap.
+
+Each entry in a task's `predecessors` array is now `{id, lag}`, not a bare id. `lag` is a signed
+integer count of *working days*, applied on top of the usual "day after the predecessor ends" rule:
+
+- `lag: 0` (the default, and what every predecessor implicitly had before this existed) reproduces
+  the exact old behavior — start the next working day after the predecessor ends.
+- **Positive lag** pushes the start later: `lag: 2` means "wait 2 extra working days after the
+  predecessor finishes, then start."
+- **Negative lag** is lead time: the successor can start *before* the predecessor is fully finished
+  (a deliberate overlap), down to and including the predecessor's own end date. `lag: -1` with a
+  1-day predecessor tail means the successor can start the same day the predecessor ends.
+
+The actual math lives in two functions:
+
+- `stepWorkingDays(iso, n)` (DATE UTILITIES): steps `n` working days away from a date, skipping
+  weekends/holidays, not counting the starting date itself. `n` may be negative (step backward) or
+  zero (returns the date unchanged). `stepWorkingDays(end, 1)` with no lag reproduces the old
+  `nextWorkingDayInclusive(addDays(end, 1))` call it replaced — verified by a dedicated jsdom test,
+  since silently changing this for the zero-lag case would have broken every schedule saved before
+  lag existed.
+- `earliestStartFromPredecessors(task)` calls `stepWorkingDays(p.end, 1 + link.lag)` per predecessor
+  edge and takes the **latest** resulting candidate date, not simply the latest predecessor `end`.
+  With multiple predecessors, each one's own lag is independent — a short lag on the
+  later-finishing predecessor can still lose to a longer lag on an earlier-finishing one, so you
+  can't shortcut this by finding the max `end` first and applying one lag to it.
+
+No clamping is applied to how early a negative lag can push a start (e.g. against the predecessor's
+own start date, or "today"). That's a deliberate choice to keep the feature a flexible tool rather
+than a prescriptive one; revisit if it turns out to produce confusing schedules in practice.
+
+**Backward compatibility.** Every schedule saved before this feature stores `predecessors` as a
+plain array of id strings (`["t9x8y7z"]`), not `{id, lag}` objects. `normalizePredecessors()` (called
+from `normalizeTask()`, so it runs on every load) migrates each string entry to `{id, lag: 0}`
+automatically — old files don't need touching on disk, only on load, and old files behave
+identically to how they always did since `lag: 0` is a no-op.
+
+### Dependency pickers: the lag UI (Option E)
+
+The Task List's Deps-chip popover and the task edit modal's "Depends on" list (see "Dependency
+pickers" above for the base picker they share) both got a lag control added to each checked row,
+without changing how unchecked rows look at all. Three layouts were mocked up and compared before
+building any of this — a stepper visible on every checked row, a modal-only control with a
+read-only badge in the popover, and this one — landing on: a checked row rests as its **date, plus
+a small `+Nd`/`-Nd` badge once a non-zero lag is set** (unchanged in size from before this feature
+existed for the common zero-lag case); clicking the date or badge reveals an inline **+/- stepper in
+the same row** (no added row height); clicking anywhere else collapses it back. Only one row is ever
+mid-edit at a time.
+
+The shared pieces (`depRowHtml()`, `depLagRestingHtml()`, `depLagStepperHtml()`,
+`wireDepLagInteraction()`) live just above `openDepsPopover()`. `wireDepLagInteraction(container,
+{getLag, onLagChange})` is a single delegated click handler bound to the *whole* popover (or the
+modal's `.modal-body`) — not just the rows list — specifically so that clicking the popover's own
+header/filter box, or a completely different field in the modal, also collapses an open stepper; an
+earlier version bound only to the rows container and missed those cases (caught by an end-to-end
+Playwright test that clicked the popover's `<h4>` and found the stepper still open).
+
+**Commit timing genuinely differs between the two callers, on purpose** — this is the reason the
+event *wiring* isn't shared even though the markup is:
+
+- The **popover** commits every change immediately (checkbox toggle, lag +/-) straight to
+  `t.predecessors`, then `recalcAll()` + `renderAll()`, matching how the rest of the popover already
+  worked. `renderAll()` never touches `#popover-root`, so this is safe to call while the popover
+  itself stays open and mid-edit.
+- The **modal** builds a local `pendingDeps` array when it opens (a clone of `t.predecessors`) and
+  only writes it back to the real task on **Save** — matching every other field in this modal
+  (Cancel discards everything). `teSnapshot()`'s unsaved-changes check includes `pendingDeps` (as
+  `"id:lag"` pairs) so a lag-only edit is correctly caught as a change worth confirming before
+  discard.
+
+**A lagged dependency needs to be visible from the Task List row itself, not just inside the
+popover.** The Deps chip (`data-act="deps"`) gets a small `±` flag whenever any of the task's
+predecessors has a non-zero `lag` — found missing during manual testing: the chip's existing hover
+tooltip (`buildDepsTooltipHtml()`) already listed the exact lag per predecessor, but there was
+nothing to prompt a user to hover in the first place. The flag itself carries no number (a task can
+have several predecessors with different lags); it's purely a "look closer" signal, with the
+tooltip staying the source of the actual values.
+
+**Gotcha: the Deps chip's width can't vary at all with its own content, or it reflows the whole
+table.** The Task List's `<table>` doesn't set `table-layout:fixed`, so every column's width is
+computed from content across *every* row, not just the row being changed. A first version of the
+lag flag appended a `<span>±</span>` inside the button — visually fine in isolation, but any single
+row's Deps chip getting wider than before (by gaining the flag) forced the browser to recompute the
+whole table's column widths, visibly shifting the Deps column's left edge (and everything after it)
+sideways. Turned out the *same* thing already happened from the dependency **count** alone, lag
+aside — "1 dep" -> "2 deps" -> "10 deps" are three different natural widths (measured: ~53px / 58px
+/ 64px), so simply checking a second or third dependency shifted the column too, independent of the
+flag fix. Fixed both at once by making `.chip-btn.dep-chip` a fixed `min-width:70px` (comfortably
+covers up to double-digit dependency counts, `text-align:center`ed inside it) with `padding-right`
+always reserved for the flag whether or not one's showing, and the flag itself a `.has-lag::after`
+pseudo-element positioned inside that reserved space. The button's box size — and therefore the
+column width — is now identical for every row regardless of dependency count or lag state.
+Verified with a Playwright check that the chip's `getBoundingClientRect()` is pixel-identical across
+0, 1, 2, and 3-dependency (with lag) states on the same row.
+
+**Gotcha: a scrolling `.popover-rows`/`#te-dep-rows` needs padding-right reserved for the
+scrollbar, not just visual padding.** Once there are enough candidates to overflow the `max-height`
+and force a scrollbar, a classic (non-overlay) scrollbar draws directly on top of the last couple of
+characters in the right-aligned `.dep-date` text, since nothing was reserving space for it — the
+row's flex layout naturally pushes that text flush to the container's right edge. Fixed with a fixed
+`padding-right` (not `scrollbar-gutter: stable`, whose Safari support is recent/inconsistent) on
+both `.popover-rows` and the modal's `#te-dep-rows`. Couldn't be verified pixel-for-pixel against a
+real classic scrollbar in this project's own dev sandbox, which renders 0-width overlay scrollbars
+regardless of `scrollbar-width`/`::-webkit-scrollbar` CSS — the fix is correct by construction
+(padding reserves clearance unconditionally) rather than screenshot-verified; flag for a real check
+on Windows/Linux Chrome or Firefox if this needs revisiting.
+
 ### Why can't a task depend on its own ancestor?
 
 If a task depends on one of its own parents (directly or transitively), you get a genuine circular
@@ -225,14 +339,22 @@ constant before publishing, so the two can't drift silently).
 
 The ℹ️ button in the header (`#btn-about`) opens `openAboutModal()`, a standard modal (same
 `.modal-backdrop`/`.modal` markup as the holidays modal) showing the current version, a link to the
-GitHub repo (`GITHUB_REPO`, also defined in the `VERSION` section), and the license. On open, it also
-calls `checkForUpdate()`, which does a best-effort `fetch()` against the GitHub Releases API
-(`GET /repos/{GITHUB_REPO}/releases/latest`) and compares the latest tag against `APP_VERSION` via
-`compareSemver()`, showing a link to the newer release if one exists. This is genuinely best-effort:
+GitHub repo (`GITHUB_REPO`, also defined in the `VERSION` section), and the license.
+
+The update check itself lives in `getUpdateCheck()`, a best-effort `fetch()` against the GitHub
+Releases API (`GET /repos/{GITHUB_REPO}/releases/latest`) that compares the latest tag against
+`APP_VERSION` via `compareSemver()`. It's memoized to a single promise (`updateCheckPromise`) rather
+than re-fetched on every call, because there are two independent callers: a background check that
+fires once at load (adding a `.has-update` badge, a small dot via CSS `::after`, to `#btn-about` if a
+newer version exists, so the user doesn't have to think to open the panel to find out) and
+`openAboutModal()`'s own check when the panel is opened (populating `#about-update-status` with a
+link to the newer release, or "You have the latest version."). Opening the panel also clears the
+badge (`btn-about.classList.remove('has-update')`) immediately, on the theory that the user has now
+seen it regardless of whether the check has resolved yet. This is genuinely best-effort throughout:
 any failure (offline, blocked by CORS/an ad blocker, rate-limited, opened from a sandboxed/local
-context that blocks the request) is caught and silently leaves the status line blank rather than
-showing an error. Checking for updates is a "nice to know," not something the app depends on to
-function, and it must never block or break opening the About panel itself.
+context that blocks the request) is caught and resolves to `null` rather than showing an error or
+badge. Checking for updates is a "nice to know," not something the app depends on to function, and it
+must never block or break opening the About panel itself.
 
 ## Theming
 
@@ -423,9 +545,13 @@ field, bind it to the raw `t.name` (with a placeholder) the same way the two exi
 
 There are two separate places a user picks dependencies: the Task List's Deps-chip popover
 (`openDepsPopover()`) and the edit modal's "Depends on" checklist (built inline in
-`openTaskEditModal()`). They share the same `.pop-row` / `.dep-name` / `.dep-date` markup and
-CSS, so a change to one visual convention usually needs to be applied to both call sites by hand
-(there's no shared row-builder function between them, just shared CSS classes).
+`openTaskEditModal()`). They share the same `.pop-row` / `.dep-name` / `.dep-date` markup and CSS,
+and, since the lag feature (see "Dependency lag" above), the actual row-building functions too
+(`depRowHtml()` and friends) — the row markup got fiddly enough (checkbox, name, conditional lag
+control with its own resting/editing states) that hand-duplicating it in two places became a real
+drift risk, not just a style-consistency nice-to-have. What's still *not* shared is the event
+wiring that decides when a change commits (immediately for the popover, only on Save for the modal)
+— see "Dependency pickers: the lag UI" for why that split is intentional, not an oversight.
 
 Both now indent each option by `depthOf(id) * 14px` on the `.dep-name` span, so a task's position in
 the hierarchy is visible at a glance. This was added because a flat alphabetical-ish list made it
@@ -437,6 +563,19 @@ listeners for the (identical, duplicated) filtering logic in each location. The 
 rebuilds its entire DOM (and loses the filter text) every time a checkbox is toggled, since
 `openDepsPopover()` calls itself again to refresh. This is a pre-existing, purposeful simplicity
 trade-off, not an oversight.
+
+**Gotcha: popover horizontal clamping must match the real CSS max-width, not an approximation.**
+`openDepsPopover()` and `openResourceFilterPopover()` (Dashboard) both position a floating
+`.popover` via `popoverLeftClamp(rect)`, which clamps the left edge so the box can never render
+past the right edge of the viewport. This used to be a bare `Math.min(rect.left, window.innerWidth
+- 260)` inlined at each call site — 260 was a guess, not the actual `.popover` CSS rule's
+`max-width:300px`, and deps rows commonly push the popover to that real 300px ceiling. The result:
+the popover's right edge could sit up to 40px past the viewport, forcing a horizontal scrollbar,
+worst when the anchor button (e.g. the Deps chip, near the right end of the Task List row) was
+already close to the window edge. Fixed by centralizing the clamp in one function that references
+`POPOVER_MAX_WIDTH` (kept in sync with the CSS by comment, since there's no way to read a CSS rule's
+value back into JS without adding a runtime measurement step) instead of a second, silently-drifting
+guess. If you widen `.popover`'s `max-width` in CSS, update `POPOVER_MAX_WIDTH` in the same change.
 
 ### Copy/paste for date fields
 
@@ -482,9 +621,13 @@ page's stylesheet. Keep it that way.
 
 ### Dashboard
 
-`classifyTask(t)` buckets a task into `overdue` / `current` / `upcoming` / `completed` / `null`
-(parents return `null`; only leaf tasks are actionable work items). `taskItemHtml(t)` is the single
-shared card-renderer used everywhere a task appears on the dashboard (the three status buckets, the
+`classifyTask(t)` buckets a task into `overdue` / `current` / `upcoming` / `upcoming-milestone` /
+`completed` / `null` (parents return `null`; only leaf tasks are actionable work items). Upcoming
+tasks and upcoming milestones (`isMilestone(t)`, i.e. `duration === 0`) get separate buckets and
+separate cards ("Upcoming Tasks" / "Upcoming Milestones") so a project with several milestones
+doesn't crowd out the regular tasks in one shared list; Overdue and In Progress deliberately stay
+mixed, since that split was only asked for on the Upcoming bucket. `taskItemHtml(t)` is the single
+shared card-renderer used everywhere a task appears on the dashboard (all the status buckets, the
 per-person breakdown, and the Unassigned card). If you're changing how a task card looks, this is the
 one place to do it. The **Unassigned** card in the "By person" section is a virtual pseudo-person built
 inline in `renderDashboard()` (filtering for tasks with an empty `resources` array) rather than a real
@@ -528,7 +671,19 @@ it:
 - `loadFromText(text)` parses and validates a JSON file, runs every task through `normalizeTask()`
   (which fills in defaults for any missing/malformed field, important for forward-compatibility if
   you add new fields later), then calls `recalcAll()` to self-heal anything that's drifted out of a
-  valid state (circular deps, resource casing, stale milestone resources) before rendering.
+  valid state (circular deps, resource casing, stale milestone resources) before rendering. It's the
+  single entry point all three ways of opening a file funnel through: the file picker
+  (`showOpenFilePicker`), the fallback `<input type="file">`, and drag-and-drop.
+- **Drag-and-drop** a `.json` file onto the window is a fourth on-ramp to the same `loadFromText()`
+  path, not a separate load mechanism. `window`-level `dragenter`/`dragover`/`dragleave`/`drop`
+  listeners `preventDefault()` on every stage (otherwise the browser navigates to the dropped file
+  instead of firing `drop`), guarded by `isFileDrag()` so a drag that isn't carrying files doesn't
+  trigger anything. `dragDepth` is a counter, not a boolean, because `dragenter`/`dragleave` fire
+  once per child element the pointer crosses while dragging over the page, not once for the whole
+  window: a boolean flickers the overlay on and off as the drag crosses element boundaries; the
+  counter only hides it once it's genuinely left. The full-screen `#drop-overlay` has
+  `pointer-events:none` so it never itself becomes a drag target and doesn't interfere with the
+  window-level listeners underneath it.
 
 ## Common tasks for future changes
 

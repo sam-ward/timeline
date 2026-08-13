@@ -17,14 +17,17 @@ and read the descriptions in the edit modal / hover tooltips as you go.
   `API Endpoints`), for dependency-picker indentation and Task List nesting.
 - **Dependencies**: same-branch chains, a leaf depending on a whole parent
   task in another branch, cross-branch (sibling-subtree) dependencies, and
-  a milestone with two predecessors at once.
+  a milestone with two predecessors at once. Also a positive dependency lag
+  (`ph2-be-db`, "+2d" — starts 2 working days after its predecessor, not the
+  next working day) and a negative one/lead time (`ph2-fe-ui`, "-1d" —
+  starts before its predecessor is fully finished).
 - **Milestones**: both completed (done, filled diamond) and not-yet-reached
   (open diamond) states.
 - **Parent/summary rollups**: dates, %, and resources computed from children.
 - **RAG status**: all three colors plus "not set", including on a parent
   task.
-- **Dashboard buckets**: Overdue, In Progress (current), Upcoming, and
-  Completed are all populated.
+- **Dashboard buckets**: Overdue, In Progress (current), Upcoming Tasks,
+  Upcoming Milestones, and Completed are all populated.
 - **Resource handling**: multi-resource tasks, a case-variant name
   (`carol` vs `Carol`) to check canonicalization, and unassigned tasks (for
   the Dashboard's "Unassigned" card).

@@ -126,7 +126,7 @@
     {
       "id": "ph2-be-db",
       "name": "Database Schema",
-      "description": "Multi-resource task (2 people) chained off ph2-be-api — also behind schedule (overdue).",
+      "description": "Multi-resource task (2 people) chained off ph2-be-api — also behind schedule (overdue). Exercises a positive dependency lag: the DBA isn't available the moment the API work finishes, so this doesn't start until 2 working days after ph2-be-api ends, not the very next working day. Should show a '+2d' badge on this task's Deps chip/popover, and the Gantt/tooltip gap between the two should visibly reflect the wait.",
       "notes": "",
       "resources": ["Bob", "Carol"],
       "duration": 6,
@@ -135,7 +135,7 @@
       "manualEnd": false,
       "percentComplete": 30,
       "status": "amber",
-      "predecessors": ["ph2-be-api"],
+      "predecessors": [{"id": "ph2-be-api", "lag": 2}],
       "parentId": "ph2-be",
       "collapsed": false
     },
@@ -158,7 +158,7 @@
     {
       "id": "ph2-fe-ui",
       "name": "UI Components",
-      "description": "Resources use lowercase 'carol' — since 'Carol' (capitalized) already appears earlier in this file on ph2-be-db, this should canonicalize to the same person, same capitalization, in every resource list/filter/Dashboard person-card. No RAG status set (should show the neutral/unset dot, not a color).",
+      "description": "Resources use lowercase 'carol' — since 'Carol' (capitalized) already appears earlier in this file on ph2-be-db, this should canonicalize to the same person, same capitalization, in every resource list/filter/Dashboard person-card. No RAG status set (should show the neutral/unset dot, not a color). Exercises a negative dependency lag (lead time): UI work can start against the mocked API shape before ph2-be-api is fully finished, so this is allowed to start 1 working day before ph2-be-api's own end date — the overlapping-tasks case, not just 'waits longer'. Should show a '-1d' badge.",
       "notes": "",
       "resources": ["carol"],
       "duration": 12,
@@ -167,7 +167,7 @@
       "manualEnd": false,
       "percentComplete": 50,
       "status": null,
-      "predecessors": ["ph2-be-api"],
+      "predecessors": [{"id": "ph2-be-api", "lag": -1}],
       "parentId": "ph2-fe",
       "collapsed": false
     },

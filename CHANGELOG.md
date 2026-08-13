@@ -7,6 +7,51 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [1.1.0] - 2026-08-13
+
+### Added
+
+- Task List date fields now show a tooltip on hover explaining the
+  Ctrl/Cmd+C / Ctrl/Cmd+V copy-paste shortcut, which previously had no
+  visible indication it existed. Only shown on editable (unlocked) date
+  fields, since locked ones are `disabled` and can't be focused to use
+  the shortcut at all.
+- Drag a `.json` schedule file onto the window to open it, alongside the
+  existing Open button/file picker.
+- Dashboard: upcoming milestones now have their own "Upcoming Milestones"
+  card, separate from "Upcoming Tasks", instead of being listed together.
+- The About button (ℹ️) now checks for a newer version in the background
+  on load and shows a small orange dot if one's available, instead of
+  only surfacing that after opening the About panel.
+- Dependencies can now have a **lag** (or negative lag / lead time): a
+  number of working days a dependent task waits after its predecessor
+  finishes before it's eligible to start, instead of always starting the
+  very next working day. Set per dependency from the Task List's Deps
+  popover or the task edit modal's "Depends on" list — check a
+  dependency, then click its date (or, once a lag is set, the small
+  badge next to it) to reveal a +/- stepper in place. A lag of 0
+  (the default, and what every existing dependency has) behaves exactly
+  as before. The Task List's Deps chip now shows a small "±" flag
+  whenever a lag is affecting a task's scheduled start, since it was
+  otherwise only visible by hovering the chip or opening the picker.
+
+### Fixed
+
+- The Task List's dependency picker (and the Dashboard's resource filter)
+  could render partially off the right edge of the window, forcing a
+  horizontal scrollbar. The clamp keeping these popovers on-screen used a
+  guessed width instead of the popover's real CSS max-width.
+- Task List: % Done column is a little narrower, giving the Deps popover
+  more room to open without needing to clamp at all. (Start/End were
+  narrowed too in an earlier pass, but that made the native date
+  picker's calendar icon overlap the last digit of the year in some
+  browsers — reverted to their original width, since the popover clamp
+  fix above doesn't actually depend on the columns being narrower.)
+- Dependency picker (Task List popover and task edit modal): once there
+  were enough candidates to scroll, the scrollbar could overlap the last
+  couple of digits of the right-aligned date text. Both lists now reserve
+  padding for it.
+
 ## [1.0.1] - 2026-08-13
 
 ### Fixed
@@ -59,6 +104,7 @@ version check), all of which shipped as part of this same tag.
   app header, with a best-effort check against the GitHub Releases API for
   a newer version.
 
-[Unreleased]: https://github.com/sam-ward/timeline/compare/v1.0.1...HEAD
+[Unreleased]: https://github.com/sam-ward/timeline/compare/v1.1.0...HEAD
+[1.1.0]: https://github.com/sam-ward/timeline/compare/v1.0.1...v1.1.0
 [1.0.1]: https://github.com/sam-ward/timeline/compare/v1.0.0...v1.0.1
 [1.0.0]: https://github.com/sam-ward/timeline/releases/tag/v1.0.0
