@@ -1746,7 +1746,7 @@ function renderTaskTable(){
     // --- start ---
     const tdStart = document.createElement('td');
     const startLocked = !!(t.predecessors && t.predecessors.length) || hasChildren(t.id);
-    tdStart.innerHTML = `<input type="date" class="cell-input date-input" data-field="start" value="${t.start||''}" title="Ctrl/Cmd+C to copy, Ctrl/Cmd+V to paste this date" ${startLocked?'disabled':''}>`;
+    tdStart.innerHTML = `<input type="date" class="cell-input date-input" data-field="start" value="${t.start||''}" ${startLocked?'disabled':'title="Ctrl/Cmd+C to copy, Ctrl/Cmd+V to paste this date"'}>`;
     tr.appendChild(tdStart);
 
     // --- duration ---
@@ -1758,7 +1758,7 @@ function renderTaskTable(){
     // --- end ---
     const tdEnd = document.createElement('td');
     const endLocked = hasChildren(t.id) || !t.manualEnd;
-    tdEnd.innerHTML = `<input type="date" class="cell-input date-input" data-field="end" value="${t.end||''}" title="Ctrl/Cmd+C to copy, Ctrl/Cmd+V to paste this date" ${endLocked?'disabled':''}>
+    tdEnd.innerHTML = `<input type="date" class="cell-input date-input" data-field="end" value="${t.end||''}" ${endLocked?'disabled':'title="Ctrl/Cmd+C to copy, Ctrl/Cmd+V to paste this date"'}>
       ${hasChildren(t.id)?'':`<label class="lock-toggle"><input type="checkbox" data-field="manualEnd" ${t.manualEnd?'checked':''}> set end manually</label>`}`;
     tr.appendChild(tdEnd);
 

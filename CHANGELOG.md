@@ -11,7 +11,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 - Task List date fields now show a tooltip on hover explaining the
   Ctrl/Cmd+C / Ctrl/Cmd+V copy-paste shortcut, which previously had no
-  visible indication it existed.
+  visible indication it existed. Only shown on editable (unlocked) date
+  fields, since locked ones are `disabled` and can't be focused to use
+  the shortcut at all.
 
 ## [1.0.1] - 2026-08-13
 
