@@ -2,16 +2,46 @@
 
 ## Branching
 
-- `main` is always releasable. Don't commit straight to it.
+- `main` is always releasable.
 - Every change (bug fix, tweak, feature) gets its own short-lived branch off
   `main`, named for what it does, e.g. `fix/gantt-today-scroll` or
   `feat/dashboard-milestone-split`.
 - Open a PR into `main` when it's ready. Merge once it's reviewed and, per
-  the working discipline in `HANDOFF.md`/`ARCHITECTURE.md`, actually tested
+  the working discipline in `AGENTS.md`/`ARCHITECTURE.md`, actually tested
   (jsdom for logic, Playwright for anything visual/print/dark-mode-related —
   see `tests/README.md`).
 - No persistent `dev` branch — keep branches short-lived and merge them, so
   `main` doesn't drift far from what's actually shipped.
+- `main` is protected on GitHub: no force-pushes, no deletion, and pushes
+  from anyone other than a repo admin must come through a PR. See "Direct
+  pushes to main" below for the one narrow exception.
+
+## Direct pushes to main
+
+Repo admins are exempt from the PR requirement on `main` — GitHub allows it,
+but that's a bypass for genuine housekeeping, not a default. Use it only
+for a **standalone** change that doesn't touch app behavior or the process
+itself:
+
+- `backlog.md` housekeeping (checking off items, adding new ones, reprioritizing).
+- Fixing a typo or updating a screenshot in `README.md`.
+- Anything else purely editorial, with no code behind it.
+
+**Everything else still goes through a branch and a PR, no exceptions** —
+in particular:
+
+- Any change to `timeline-schedule-tool.html`, `.github/workflows/*`,
+  `CONTRIBUTING.md`, or `AGENTS.md`.
+- **`CHANGELOG.md` or docs updates that result from a feature or bug fix.**
+  Those ride along in the same branch/PR as the code that motivated them —
+  never split out and pushed to `main` on their own, even though the
+  changelog entry itself is "just docs." The point is that a PR should tell
+  the whole story of a change, changelog included; splitting it defeats
+  that.
+
+If you're not sure whether something qualifies as standalone housekeeping,
+default to a branch + PR — the bypass exists to remove friction from
+trivial cases, not to become the normal path.
 
 ## Cutting a release
 

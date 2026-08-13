@@ -11,11 +11,9 @@ Changelog and remove from here once released).
 
 ## In progress
 
-- [~] Infra track (see "Broader / process" below) — being tackled first so
-  subsequent bug/feature work already lands through the new release
-  process. Code/docs/workflow done on branch `infra/release-process`,
-  awaiting review; branch protection and the actual v1.0.0 tag are still
-  open (see below).
+- Infra track (see "Broader / process" below) is done except for GitHub
+  branch protection on `main`, which is still open pending a go-ahead.
+  `v1.0.0` is tagged and released.
 
 ## Bugs
 
@@ -77,13 +75,33 @@ fixes to flow through the new release process rather than around it.
    section. (`.github/workflows/release.yml`)
 3. [x] Branch strategy: feature branches → PR → `main`, documented in
    `CONTRIBUTING.md`. Releases are cut by tagging `main`.
-4. [ ] GitHub branch protection on `main` (require PRs) — a repo setting,
-   not a code change; needs explicit go-ahead before being flipped since it
-   affects collaborators immediately.
+4. [x] GitHub branch protection on `main`: PRs required (admin bypass
+   allowed for standalone docs/backlog housekeeping only — see
+   `CONTRIBUTING.md`'s "Direct pushes to main"), force-pushes and branch
+   deletion blocked, no required review count.
 5. [x] GitHub link + About panel in the app header, showing current version
    and license, with a best-effort "newer version available" check against
    the GitHub Releases API.
 6. [x] Versioning: semantic versioning (`vMAJOR.MINOR.PATCH`); `APP_VERSION`
    in the HTML starts at `1.0.0` for the current stable state.
-7. [ ] Open the PR for branch `infra/release-process` into `main`, merge,
+7. [x] Open the PR for branch `infra/release-process` into `main`, merge,
    then tag `v1.0.0` and push the tag to trigger the first real release.
+   Done — PRs #1–#3 merged in order (release process, verification fixture,
+   `AGENTS.md`), `v1.0.0` tagged and released:
+   https://github.com/sam-ward/timeline/releases/tag/v1.0.0
+8. [ ] **Needs a design discussion before any code** — whether it's worth
+   restructuring `timeline-schedule-tool.html` for better *development*
+   ergonomics as it keeps growing (currently ~2,700 lines, one file, one
+   `<script>` block) — e.g. splitting CSS/JS/markup into separate source
+   files during authoring, assembled into the single shipped file by a
+   lightweight build/concat step — while keeping the **shipped output**
+   exactly what it is today: one dependency-free file, still runnable by
+   double-clicking it, no runtime framework or bundler added to the app
+   itself. This is explicitly about authoring ergonomics only, not the
+   "why a single file?" constraint in `ARCHITECTURE.md`/`AGENTS.md`, which
+   stays either way. Needs to weigh editor/diff/merge-conflict ergonomics
+   of smaller files against the current zero-tooling "the file you edit is
+   the file that runs" simplicity, and whatever CI/build-step complexity a
+   concat step would add (including keeping it in sync with the release
+   workflow). Park until the smaller bugs/improvements above are cleared —
+   revisit then.
