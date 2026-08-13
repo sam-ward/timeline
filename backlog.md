@@ -137,6 +137,40 @@ shipped in `v1.0.1`; see `CHANGELOG.md` for details.
    for what its content actually requires, and deciding how overflow
    should behave for each one (truncate? wrap? scroll?) rather than
    just patching the two instances above.
+8. [ ] **Needs a design discussion before any code — exploratory.** Explore
+   identifying the **critical path** through a schedule, both as data and
+   as an optional/toggleable visual element. Not scoped yet; open
+   questions to work through before building anything:
+   - **What "critical path" means here, concretely.** Classically: the
+     longest chain of dependent tasks (by duration) ending at the
+     project's overall finish, where any slip on a task in that chain
+     slips the whole project by the same amount; every other task has
+     some slack ("float"). Computing it needs both a forward pass
+     (earliest start/finish, which `recalcAll()` already effectively
+     does) and a backward pass (latest start/finish working back from
+     the project end) to get each task's float — the backward pass
+     doesn't exist in the scheduling engine today.
+   - **What counts as "the project end"?** There's no single explicit
+     "project end" concept in the data model right now — the latest
+     `end` across all leaf tasks, implicitly. Does that need to become
+     an explicit thing (e.g. pick a milestone as the target), or is
+     "latest end across everything" good enough?
+   - **Lag interacts with this.** A dependency's `lag` (see the
+     dependency-lag work) changes how long a chain effectively is —
+     the classic algorithm needs adjusting to account for it, not just
+     for raw task durations.
+   - **Parent/summary tasks.** Does the critical path highlight leaf
+     tasks only, or also mark a parent as "contains a critical-path
+     task"? Parents are rollups, not real participants in the
+     dependency graph the same way leaves are.
+   - **Where it's shown, and how optional.** Gantt bar highlighting
+     (a distinct color/border, similar to how overdue tasks already get
+     a red inset shadow) seems like the natural home, toggleable so it
+     doesn't clutter for people who don't care about it. Whether it also
+     belongs on the Dashboard (a count? a list? its own card?) is
+     genuinely open — flagged as "not sure if it could be represented
+     there" when this was raised, worth thinking through rather than
+     assuming yes.
 
 ## Broader / process (tackling first)
 
