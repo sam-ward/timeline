@@ -8,9 +8,9 @@
   `feat/dashboard-milestone-split`.
 - Open a PR into `main` when it's ready. Merge once it's reviewed and, per
   the working discipline in `AGENTS.md`/`ARCHITECTURE.md`, actually tested
-  (jsdom for logic, Playwright for anything visual/print/dark-mode-related —
+  (jsdom for logic, Playwright for anything visual/print/dark-mode-related;
   see `tests/README.md`).
-- No persistent `dev` branch — keep branches short-lived and merge them, so
+- No persistent `dev` branch. Keep branches short-lived and merge them, so
   `main` doesn't drift far from what's actually shipped.
 - `main` is protected on GitHub: no force-pushes, no deletion, and pushes
   from anyone other than a repo admin must come through a PR. See "Direct
@@ -18,7 +18,7 @@
 
 ## Direct pushes to main
 
-Repo admins are exempt from the PR requirement on `main` — GitHub allows it,
+Repo admins are exempt from the PR requirement on `main`. GitHub allows it,
 but that's a bypass for genuine housekeeping, not a default. Use it only
 for a **standalone** change that doesn't touch app behavior or the process
 itself:
@@ -27,20 +27,20 @@ itself:
 - Fixing a typo or updating a screenshot in `README.md`.
 - Anything else purely editorial, with no code behind it.
 
-**Everything else still goes through a branch and a PR, no exceptions** —
+**Everything else still goes through a branch and a PR, no exceptions,**
 in particular:
 
 - Any change to `timeline-schedule-tool.html`, `.github/workflows/*`,
   `CONTRIBUTING.md`, or `AGENTS.md`.
 - **`CHANGELOG.md` or docs updates that result from a feature or bug fix.**
-  Those ride along in the same branch/PR as the code that motivated them —
+  Those ride along in the same branch/PR as the code that motivated them,
   never split out and pushed to `main` on their own, even though the
   changelog entry itself is "just docs." The point is that a PR should tell
   the whole story of a change, changelog included; splitting it defeats
   that.
 
 If you're not sure whether something qualifies as standalone housekeeping,
-default to a branch + PR — the bypass exists to remove friction from
+default to a branch + PR. The bypass exists to remove friction from
 trivial cases, not to become the normal path.
 
 ## Cutting a release
@@ -69,20 +69,20 @@ Releases are tagged commits on `main`, built automatically by
    already generates a "Source code (zip/tar.gz)" download on every release
    automatically from the tag, so the workflow doesn't need to build its
    own repo snapshot). If the version check fails, the workflow fails
-   loudly instead of publishing a mismatched release — fix the version in
+   loudly instead of publishing a mismatched release; fix the version in
    the HTML (or the tag) and re-tag.
 
 The app's own About panel (ℹ️ button in the header) checks the GitHub
 Releases API against the running `APP_VERSION` and flags when a newer
-release exists, so tagging is what actually notifies users of an update —
-don't skip it even for small fixes if you want existing users to see it.
+release exists, so tagging is what actually notifies users of an update.
+Don't skip it even for small fixes if you want existing users to see it.
 
 ## Testing
 
 There's no build step and no runtime test suite bundled in the HTML file
-itself (that would add a dependency, which defeats the point — see "Why a
+itself (that would add a dependency, which defeats the point; see "Why a
 single file?" in `ARCHITECTURE.md`). There is a dev-only example test
-harness in `tests/` — see `tests/README.md` for setup and what each script
+harness in `tests/`; see `tests/README.md` for setup and what each script
 checks. Run both before opening a PR that touches app behavior:
 
 ```
