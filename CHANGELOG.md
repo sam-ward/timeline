@@ -17,7 +17,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ## [1.0.0] - 2026-08-13
 
-Baseline release — the app as it stood before the release process existed,
+Baseline release: the app as it stood before the release process existed,
 covering everything built up to this point.
 
 ### Added
@@ -37,7 +37,7 @@ covering everything built up to this point.
 - Copy/paste for date fields (in-memory, Ctrl/Cmd+C/V while a date field is
   focused).
 - Example test harness in `tests/` (jsdom functional tests, Playwright
-  visual/print tests) — dev tooling, not bundled into the app.
+  visual/print tests); dev tooling, not bundled into the app.
 
 [Unreleased]: https://github.com/sam-ward/timeline/compare/v1.0.0...HEAD
 [1.0.0]: https://github.com/sam-ward/timeline/releases/tag/v1.0.0

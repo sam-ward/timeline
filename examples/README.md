@@ -6,7 +6,7 @@ Open it via **Open…** (or drag-and-drop, once that lands) to manually
 eyeball a change across the Task List, Gantt Chart, and Dashboard without
 having to hand-build test data each time.
 
-It's a manual-verification aid, not an automated test — see `tests/` for
+It's a manual-verification aid, not an automated test; see `tests/` for
 those. Each task's own `description` field explains what it's there to
 demonstrate, so the fastest way to understand it is to open it in the app
 and read the descriptions in the edit modal / hover tooltips as you go.
@@ -41,10 +41,10 @@ and read the descriptions in the edit modal / hover tooltips as you go.
 
 Dates are anchored close to when this fixture was last written (mid-August
 2026) so the Dashboard buckets land in sensible places. They'll drift over
-time — eventually everything will read as "overdue". If that happens, either
+time. Eventually everything will read as "overdue." If that happens, either
 regenerate the dates (shift every task's date fields forward by the same
 offset) or check the fixture's `meta.created` date against today and treat
 bucket placement loosely if it's been more than a few months.
 
 If you add or change a feature, update this fixture (and this README) in
-the same pass — see the reminder in `ARCHITECTURE.md`.
+the same pass; see the reminder in `ARCHITECTURE.md`.
