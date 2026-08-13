@@ -17,6 +17,16 @@ Changelog and remove from here once released).
    vertical-centering rule, so it just sits at its default static
    position rather than actually being centered against the `<select>`'s
    text — worth checking as the likely cause when this gets picked up).
+2. [x] About panel could report "you have the latest version"
+   indefinitely in a long-lived tab, even after a newer version had
+   since been published. Found live, right after publishing `v1.1.0`.
+   Root cause: `getUpdateCheck()`'s memoized promise was being reused
+   forever, so reopening the panel just replayed the one-off background
+   check's result from page load instead of checking again. Fixed by
+   resetting the memo in `openAboutModal()` before every check — opening
+   the panel is a deliberate "check now" action and should never hand
+   back a stale cached answer. In progress on `fix/stale-update-check`,
+   not yet merged; see `CHANGELOG.md`'s `[Unreleased]` section.
 
 The previous batches (Gantt "Today" scroll, RAG red/amber contrast, live
 status dot, arrow-key focus loss, stale selection-highlight repaint,

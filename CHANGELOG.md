@@ -7,6 +7,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+### Fixed
+
+- About panel: reopening it could report "you have the latest version"
+  indefinitely in a long-lived tab, even after a newer version had since
+  been published. The update check was reusing the result of the
+  one-off background check from page load instead of checking again;
+  opening the panel now always checks fresh.
+
 ## [1.1.0] - 2026-08-13
 
 ### Added
