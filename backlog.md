@@ -63,7 +63,15 @@ repaint) shipped in `v1.0.1`; see `CHANGELOG.md` for details.
    Progress card pattern. Overdue and In Progress stay mixed; only the
    Upcoming bucket was split. In progress on `feature/improvements-batch`,
    not yet merged; see `CHANGELOG.md`'s `[Unreleased]` section.
-5. [ ] **Needs a design discussion before any code.** Auto-scheduling via
+5. [x] About button (ℹ️): show an update-available indicator without
+   requiring the panel to be opened first. Not from the original list;
+   raised separately. The update check now runs once in the background on
+   load (`getUpdateCheck()`, memoized so the background check and the
+   panel's own check share one request) and adds a small orange dot to the
+   button if a newer version exists. Opening the panel clears the dot. In
+   progress on `feature/improvements-batch`, not yet merged; see
+   `CHANGELOG.md`'s `[Unreleased]` section.
+6. [ ] **Needs a design discussion before any code.** Auto-scheduling via
    dependencies is useful but currently conflates two different concerns:
    dependency logic (what must finish before what) and timing/sequencing
    (when things should actually happen). Possible directions: allow a manual

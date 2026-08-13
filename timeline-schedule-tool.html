@@ -179,6 +179,11 @@ input,select,textarea{font-family:inherit;font-size:12px;color:var(--text);}
 .tbtn.primary{background:var(--accent); border-color:var(--accent); color:#fff;}
 .tbtn.primary:hover{background:var(--accent-dark);}
 .tbtn:disabled{opacity:.35; cursor:not-allowed;}
+#btn-about{position:relative;}
+#btn-about.has-update::after{
+  content:''; position:absolute; top:3px; right:3px; width:8px; height:8px; border-radius:50%;
+  background:var(--warn); border:1.5px solid var(--ink-2);
+}
 #file-input{display:none;}
 
 /* ---------- Tabs ---------- */
@@ -2621,33 +2626,50 @@ function openAboutModal(){
     </div>
   </div>`;
   root.querySelectorAll('[data-act="close"]').forEach(b=>b.addEventListener('click', closeModal));
-  checkForUpdate();
+  // the user has now seen the About panel (and, once the check resolves, the update status text
+  // inside it), so the "look at me" badge on the toolbar button has done its job
+  document.getElementById('btn-about').classList.remove('has-update');
+  getUpdateCheck().then(info => {
+    const target = document.getElementById('about-update-status');
+    if(!target) return; // modal was closed before the check resolved
+    if(!info){ target.textContent = ''; return; }
+    if(info.newer){
+      target.innerHTML = `A newer version (v${escapeHtml(info.latest)}) is available — <a href="${escapeHtml(info.url)}" target="_blank" rel="noopener">see the release</a>.`;
+    } else {
+      target.textContent = 'You have the latest version.';
+    }
+  });
 }
 
-// Best-effort only: silently gives up on any network/CORS/rate-limit failure
-// rather than showing an error state — this is a "nice to know", not
-// something the app depends on.
-function checkForUpdate(){
-  const el = document.getElementById('about-update-status');
-  if(!el || !window.fetch){ return; }
-  fetch(`https://api.github.com/repos/${GITHUB_REPO}/releases/latest`, { headers: { 'Accept': 'application/vnd.github+json' } })
+// Best-effort only: silently gives up on any network/CORS/rate-limit failure rather than showing
+// an error state — this is a "nice to know", not something the app depends on. Memoized to a
+// single promise so the background check (on load) and the About modal's own check (if opened
+// before/after) share one network request instead of firing twice.
+let updateCheckPromise = null;
+function getUpdateCheck(){
+  if(updateCheckPromise) return updateCheckPromise;
+  if(!window.fetch){ return Promise.resolve(null); }
+  updateCheckPromise = fetch(`https://api.github.com/repos/${GITHUB_REPO}/releases/latest`, { headers: { 'Accept': 'application/vnd.github+json' } })
     .then(r => r.ok ? r.json() : Promise.reject(new Error('release check failed')))
     .then(rel => {
-      const target = document.getElementById('about-update-status');
-      if(!target) return; // modal was closed before the response arrived
       const latest = (rel && rel.tag_name || '').replace(/^v/i, '');
-      if(!latest){ target.textContent = ''; return; }
-      if(compareSemver(latest, APP_VERSION) > 0){
-        target.innerHTML = `A newer version (v${escapeHtml(latest)}) is available — <a href="${escapeHtml(rel.html_url || ('https://github.com/' + GITHUB_REPO + '/releases'))}" target="_blank" rel="noopener">see the release</a>.`;
-      } else {
-        target.textContent = 'You have the latest version.';
-      }
+      if(!latest) return null;
+      return {
+        latest,
+        url: rel.html_url || ('https://github.com/' + GITHUB_REPO + '/releases'),
+        newer: compareSemver(latest, APP_VERSION) > 0
+      };
     })
-    .catch(()=>{
-      const target = document.getElementById('about-update-status');
-      if(target) target.textContent = '';
-    });
+    .catch(()=>null);
+  return updateCheckPromise;
 }
+
+// Runs once in the background on load (not waiting for the About panel to be opened) so the
+// toolbar button itself can flag a pending update via the `.has-update` badge, rather than the
+// user having to think to check.
+getUpdateCheck().then(info => {
+  if(info && info.newer) document.getElementById('btn-about').classList.add('has-update');
+});
 
 /* =========================================================================
    RENDER: DASHBOARD

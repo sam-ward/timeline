@@ -225,14 +225,22 @@ constant before publishing, so the two can't drift silently).
 
 The ℹ️ button in the header (`#btn-about`) opens `openAboutModal()`, a standard modal (same
 `.modal-backdrop`/`.modal` markup as the holidays modal) showing the current version, a link to the
-GitHub repo (`GITHUB_REPO`, also defined in the `VERSION` section), and the license. On open, it also
-calls `checkForUpdate()`, which does a best-effort `fetch()` against the GitHub Releases API
-(`GET /repos/{GITHUB_REPO}/releases/latest`) and compares the latest tag against `APP_VERSION` via
-`compareSemver()`, showing a link to the newer release if one exists. This is genuinely best-effort:
+GitHub repo (`GITHUB_REPO`, also defined in the `VERSION` section), and the license.
+
+The update check itself lives in `getUpdateCheck()`, a best-effort `fetch()` against the GitHub
+Releases API (`GET /repos/{GITHUB_REPO}/releases/latest`) that compares the latest tag against
+`APP_VERSION` via `compareSemver()`. It's memoized to a single promise (`updateCheckPromise`) rather
+than re-fetched on every call, because there are two independent callers: a background check that
+fires once at load (adding a `.has-update` badge, a small dot via CSS `::after`, to `#btn-about` if a
+newer version exists, so the user doesn't have to think to open the panel to find out) and
+`openAboutModal()`'s own check when the panel is opened (populating `#about-update-status` with a
+link to the newer release, or "You have the latest version."). Opening the panel also clears the
+badge (`btn-about.classList.remove('has-update')`) immediately, on the theory that the user has now
+seen it regardless of whether the check has resolved yet. This is genuinely best-effort throughout:
 any failure (offline, blocked by CORS/an ad blocker, rate-limited, opened from a sandboxed/local
-context that blocks the request) is caught and silently leaves the status line blank rather than
-showing an error. Checking for updates is a "nice to know," not something the app depends on to
-function, and it must never block or break opening the About panel itself.
+context that blocks the request) is caught and resolves to `null` rather than showing an error or
+badge. Checking for updates is a "nice to know," not something the app depends on to function, and it
+must never block or break opening the About panel itself.
 
 ## Theming
 

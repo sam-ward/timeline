@@ -18,6 +18,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
   existing Open button/file picker.
 - Dashboard: upcoming milestones now have their own "Upcoming Milestones"
   card, separate from "Upcoming Tasks", instead of being listed together.
+- The About button (ℹ️) now checks for a newer version in the background
+  on load and shows a small orange dot if one's available, instead of
+  only surfacing that after opening the About panel.
 
 ## [1.0.1] - 2026-08-13
 
