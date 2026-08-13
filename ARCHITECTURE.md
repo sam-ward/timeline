@@ -42,6 +42,7 @@ after your change is the recommended way to verify you haven't broken anything.
   <div id="hover-tooltip">    Shared hover tooltip element
 
   <script>
+    VERSION                      APP_VERSION / GITHUB_REPO constants, see Versioning below
     STATE                        global `state` object, `dirty`, `fileHandle`, etc.
     HOVER TOOLTIP                generic tooltip engine, reused everywhere
     DATE UTILITIES                working-day math (weekends + holidays)
@@ -56,6 +57,7 @@ after your change is the recommended way to verify you haven't broken anything.
     MODAL: notes                 the notes/description edit popup
     RENDER: GANTT                renderGantt() — the interactive chart
     MODAL: holidays              non-working-day manager
+    MODAL: about                 About panel, version display, update check
     RENDER: DASHBOARD            renderDashboard(), classifyTask, taskItemHtml
     TABS                         switchTab()
     TOP TOOLBAR                  all the button click handlers
@@ -212,6 +214,25 @@ found during development (see git history / conversation log if available) — `
 now excludes a task's own ancestors from the dependency picker UI, and `stripCircularPredecessors()`
 cleans up any such link defensively (e.g. if a sibling task is indented to become a child of a task it
 already depended on).
+
+## Versioning & the About panel
+
+`APP_VERSION` (top of the `<script>` block, `VERSION` section) is the single source of truth for the
+app's current version — semantic versioning (`MAJOR.MINOR.PATCH`, no leading `v`). It's baked into the
+file, not computed, since there's no build step to inject it at. See `CONTRIBUTING.md` for the release
+process that bumps it (a GitHub Actions workflow verifies the tag being released matches this constant
+before publishing, so the two can't drift silently).
+
+The ℹ️ button in the header (`#btn-about`) opens `openAboutModal()` — a standard modal (same
+`.modal-backdrop`/`.modal` markup as the holidays modal) showing the current version, a link to the
+GitHub repo (`GITHUB_REPO`, also defined in the `VERSION` section), and the license. On open, it also
+calls `checkForUpdate()`, which does a best-effort `fetch()` against the GitHub Releases API
+(`GET /repos/{GITHUB_REPO}/releases/latest`) and compares the latest tag against `APP_VERSION` via
+`compareSemver()`, showing a link to the newer release if one exists. This is genuinely best-effort:
+any failure (offline, blocked by CORS/an ad blocker, rate-limited, opened from a sandboxed/local
+context that blocks the request) is caught and silently leaves the status line blank rather than
+showing an error — checking for updates is a "nice to know," not something the app depends on to
+function, and it must never block or break opening the About panel itself.
 
 ## Theming
 
