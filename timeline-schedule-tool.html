@@ -667,6 +667,34 @@ function markDirty(){ dirty = true; updateTitleBar(); }
 function todayISO(){ return toISO(new Date()); }
 
 /* =========================================================================
+   INPUT BLUR REPAINT WORKAROUND
+   ========================================================================= */
+// Confirmed on both Chrome and Firefox, on both Windows and Linux: after selecting text in a
+// date/text field (e.g. triple-click to select the whole value, as you'd do before copying it)
+// and then clicking somewhere that isn't itself a text/date field, the field's underlying DOM
+// state is correctly cleared immediately (document.activeElement moves on, selectionStart/End
+// reset) — but the browser doesn't actually repaint that field, so the old "selected" highlight
+// stays visibly painted on screen until something else forces a repaint nearby (e.g. focusing a
+// different field). It's a stale-paint bug in the browser's rendering of the native control, not
+// a bug in this app's focus/selection handling — but it reads as broken either way.
+//
+// Generic repaint nudges (toggling opacity/transform/display/disabled) did NOT clear it in
+// testing — the native control's selection highlight appears to live in its own paint/compositing
+// layer that those don't invalidate. What does work: momentarily clearing and restoring the
+// field's own value, which forces the control to fully redraw its internal text representation
+// from scratch. Setting .value programmatically never fires input/change, so this is a no-op from
+// the app's data-flow point of view. Deliberately scoped to text-like inputs only (excludes
+// checkboxes/radios, which don't have this visual — and excludes <select>, where reassigning
+// .value to '' would risk a visible flash of "nothing selected" before it's restored).
+document.addEventListener('blur', (e)=>{
+  const el = e.target;
+  if(!el || !el.matches || !el.matches('input:not([type="checkbox"]):not([type="radio"]), textarea')) return;
+  const v = el.value;
+  el.value = '';
+  el.value = v;
+}, true); // 'blur' doesn't bubble, so this listener must run in the capture phase to see it at all
+
+/* =========================================================================
    HOVER TOOLTIP  (generic, reused by task-list deps chip and gantt bars/icons)
    ========================================================================= */
 const tooltipEl = document.getElementById('hover-tooltip');

@@ -33,25 +33,24 @@ Changelog and remove from here once released).
    one keypress before losing focus. Likely candidate: browser fires
    `change` per arrow-key step, colliding with the full-table-rerender /
    blur-commit handling. Needs investigation before scoping the fix.
-5. [ ] Date field usability: selecting a date field's text (3–4 clicks to
-   select-all) leaves the text visually highlighted after clicking away /
-   leaving edit mode. Browser text-selection state bleeding into the app's
-   own edit-mode visuals. (Surfaced while discussing copy/paste for dates,
-   below.)
-   **Investigated, not reproduced** — tried the described gesture (click,
-   double-click, triple-click, then Ctrl/Cmd+A on a Task List Start field,
-   then clicking a different cell to blur it) in a real headless-Chromium
-   pass. The selection highlight is fully visible while focused and clears
-   completely on blur; no lingering highlight. Two things make this look
-   like a browser/OS-specific rendering quirk rather than app code: the
-   Task List's date cells are always a plain `<input type="date">` (no
-   separate view/edit-mode toggle to "leave"), and native date-input
-   segment-selection rendering is internal browser chrome mostly outside
-   CSS/JS reach — there's no app-level selection-handling code that could
-   have caused this. Safari is known to leave an "inactive selection"
-   visible after blur where Chrome clears it, which would fit. Need the
-   browser/OS it was seen on, and whether it was the Task List row or the
-   task edit modal's date field, before this can be pinned down further.
+5. [x] Date field usability: selecting a date field's text (3–4 clicks to
+   select-all) left the text visually highlighted after clicking away, until
+   focusing another text/date field. **Fixed.** First attempt to reproduce
+   (blurring by clicking into another text field) didn't show it; turned
+   out that's specifically the one thing that *does* clear it, per the
+   user's own repro steps. Re-tested blurring onto a non-field area instead
+   and reproduced it immediately, screenshot-confirmed: DOM state
+   (`document.activeElement`, `selectionStart`/`End`) is correctly cleared
+   the instant focus moves away, but the browser doesn't repaint that field.
+   The stale "selected" highlight stays visibly painted until something
+   else forces a repaint nearby (e.g. focusing a different field). A
+   genuine stale-paint bug in the browser's rendering of native form
+   controls, confirmed by the user on both Chrome and Firefox, both Windows
+   and Linux. Generic repaint nudges (toggling opacity/transform/display/
+   disabled) did not clear it; what did: momentarily clearing and restoring
+   the field's own `.value` on blur, which forces the control to fully
+   redraw its internal text representation. See the "INPUT BLUR REPAINT
+   WORKAROUND" section in the script for the fix and reasoning.
 
 ## Improvements
 
