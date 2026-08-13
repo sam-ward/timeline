@@ -65,10 +65,12 @@ Releases are tagged commits on `main`, built automatically by
    ```
 4. The `Release` workflow picks up the tag, verifies `APP_VERSION` in the
    HTML matches it, pulls that version's notes out of `CHANGELOG.md`, and
-   publishes a GitHub Release with the bare HTML file and a zip of the repo
-   attached. If the version check fails, the workflow fails loudly instead
-   of publishing a mismatched release — fix the version in the HTML (or the
-   tag) and re-tag.
+   publishes a GitHub Release with the bare HTML file attached (GitHub
+   already generates a "Source code (zip/tar.gz)" download on every release
+   automatically from the tag, so the workflow doesn't need to build its
+   own repo snapshot). If the version check fails, the workflow fails
+   loudly instead of publishing a mismatched release — fix the version in
+   the HTML (or the tag) and re-tag.
 
 The app's own About panel (ℹ️ button in the header) checks the GitHub
 Releases API against the running `APP_VERSION` and flags when a newer

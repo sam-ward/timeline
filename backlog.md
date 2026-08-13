@@ -70,9 +70,10 @@ fixes to flow through the new release process rather than around it.
 
 1. [x] `CHANGELOG.md`, maintained per release (Keep a Changelog format).
 2. [x] GitHub Actions release workflow: triggered by pushing a `vX.Y.Z` tag,
-   builds a release containing both the bare HTML file and a zip of the
-   repo snapshot, with notes pulled from the matching `CHANGELOG.md`
-   section. (`.github/workflows/release.yml`)
+   builds a release with the bare HTML file attached (GitHub's automatic
+   "Source code" zip/tar.gz already covers the repo snapshot, so the
+   workflow doesn't build a redundant one) and notes pulled from the
+   matching `CHANGELOG.md` section. (`.github/workflows/release.yml`)
 3. [x] Branch strategy: feature branches → PR → `main`, documented in
    `CONTRIBUTING.md`. Releases are cut by tagging `main`.
 4. [x] GitHub branch protection on `main`: PRs required (admin bypass
