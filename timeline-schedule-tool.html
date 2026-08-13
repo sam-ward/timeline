@@ -1943,10 +1943,22 @@ document.getElementById('task-tbody').addEventListener('change', (e)=>{
   else if(field==='manualEnd') t.manualEnd = input.checked;
   else return;
 
+  // Arrow-key stepping (or clicking the native spinner) on a date/number field fires 'change'
+  // without blurring — the field is still focused when we get here. A real edit committed by
+  // tabbing/clicking away, on the other hand, has already moved focus elsewhere by this point.
+  // Only refocus in the former case: doing it unconditionally would trap someone who deliberately
+  // moved on to the next field right back in the cell they just left.
+  const stillFocused = document.activeElement === input;
+  const taskId = t.id, fieldName = field;
+
   markDirty();
   setTimeout(()=>{
     recalcAll();
     renderAll();
+    if(stillFocused){
+      const fresh = document.querySelector(`tr[data-id="${taskId}"] [data-field="${fieldName}"]`);
+      if(fresh) fresh.focus();
+    }
   }, 0);
 });
 
