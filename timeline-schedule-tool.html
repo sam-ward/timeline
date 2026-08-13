@@ -337,7 +337,17 @@ input.res-input{width:100%; min-width:100px; overflow:hidden; text-overflow:elli
   padding:3px 7px; border-radius:10px; font-size:11px;
 }
 .chip-btn.filled{border-style:solid; border-color:var(--accent); color:var(--accent-dark); background:var(--accent-light);}
-.chip-lag-flag{margin-left:3px; color:var(--warn); font-weight:700;}
+/* Deps chip only (not the Notes chip, which reuses .chip-btn too): padding-right is reserved
+   unconditionally, whether or not a lag is actually present, specifically so the button's box
+   size never changes between the two states. table-layout:auto (no fixed layout set) recomputes
+   column widths from content across every row, so if only flagged rows were wider, checking one
+   dependency's lag on/off would visibly reflow the whole table, not just that button — this
+   overlays the flag via ::after (out of flow) inside space that's already always there instead. */
+.chip-btn.dep-chip{position:relative; padding-right:16px;}
+.chip-btn.dep-chip.has-lag::after{
+  content:'±'; position:absolute; right:5px; top:50%; transform:translateY(-50%);
+  color:var(--warn); font-weight:700; font-size:11px; line-height:1;
+}
 .lock-toggle{font-size:10px; color:var(--text-mute); display:flex; align-items:center; gap:3px; margin-top:1px;}
 .milestone-done-stack{display:flex; flex-direction:column; align-items:center; gap:2px;}
 .milestone-done-stack .stack-label{font-size:10px; color:var(--text-mute); line-height:1;}
@@ -1911,8 +1921,7 @@ function renderTaskTable(){
     const tdDeps = document.createElement('td');
     const depCount = (t.predecessors||[]).length;
     const depHasLag = (t.predecessors||[]).some(link=>link.lag);
-    const lagFlag = depHasLag ? '<span class="chip-lag-flag" title="A dependency lag is affecting this task\'s scheduled start">±</span>' : '';
-    tdDeps.innerHTML = `<button class="chip-btn ${depCount?'filled':''}" data-act="deps">${depCount ? depCount + ' dep' + (depCount>1?'s':'') : '+ dep'}${lagFlag}</button>`;
+    tdDeps.innerHTML = `<button class="chip-btn dep-chip ${depCount?'filled':''} ${depHasLag?'has-lag':''}" data-act="deps">${depCount ? depCount + ' dep' + (depCount>1?'s':'') : '+ dep'}</button>`;
     if(depCount) bindHoverTooltip(tdDeps.querySelector('button'), ()=>buildDepsTooltipHtml(t));
     tr.appendChild(tdDeps);
 

@@ -283,12 +283,25 @@ event *wiring* isn't shared even though the markup is:
   discard.
 
 **A lagged dependency needs to be visible from the Task List row itself, not just inside the
-popover.** The Deps chip (`data-act="deps"`) gets a small `±` flag (`.chip-lag-flag`) appended to
-its label whenever any of the task's predecessors has a non-zero `lag` — found missing during
-manual testing: the chip's existing hover tooltip (`buildDepsTooltipHtml()`) already listed the
-exact lag per predecessor, but there was nothing to prompt a user to hover in the first place. The
-flag itself carries no number (a task can have several predecessors with different lags); it's
-purely a "look closer" signal, with the tooltip staying the source of the actual values.
+popover.** The Deps chip (`data-act="deps"`) gets a small `±` flag whenever any of the task's
+predecessors has a non-zero `lag` — found missing during manual testing: the chip's existing hover
+tooltip (`buildDepsTooltipHtml()`) already listed the exact lag per predecessor, but there was
+nothing to prompt a user to hover in the first place. The flag itself carries no number (a task can
+have several predecessors with different lags); it's purely a "look closer" signal, with the
+tooltip staying the source of the actual values.
+
+**Gotcha: the flag can't just be extra text in the button's content, or it reflows the whole
+table.** A first version appended a `<span>±</span>` inside the button — visually fine in
+isolation, but the Task List's `<table>` doesn't set `table-layout:fixed`, so column widths are
+computed from content across *every* row. Any single row's Deps chip getting wider than before (by
+gaining the flag) forced the browser to recompute the whole table's column widths, visibly shifting
+the Deps column's left edge (and everything after it) sideways just from toggling one task's lag on
+or off — jarring, and not what "add a small flag" should cost. Fixed by reserving the flag's space
+unconditionally: the Deps chip always gets `.dep-chip`'s `padding-right:16px` (constant, whether or
+not a lag exists), and the flag itself is a `.has-lag::after` pseudo-element absolutely positioned
+inside that already-reserved space — so the button's box size, and therefore the column width, never
+changes between the flagged and unflagged states. Verified with a Playwright check that the chip's
+`getBoundingClientRect()` is pixel-identical before/after adding a lag.
 
 **Gotcha: a scrolling `.popover-rows`/`#te-dep-rows` needs padding-right reserved for the
 scrollbar, not just visual padding.** Once there are enough candidates to overflow the `max-height`
