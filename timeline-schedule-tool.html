@@ -2441,7 +2441,17 @@ document.getElementById('zoom-out').addEventListener('click', ()=>{ dayWidth = M
 document.getElementById('btn-today').addEventListener('click', ()=>{
   const scroll = document.getElementById('gantt-scroll');
   const bar = document.querySelector('.today-line');
-  if(bar) scroll.scrollLeft = parseFloat(bar.style.left) - 200;
+  if(!bar) return;
+  // bar.style.left is today's position in the full (unscrolled) content coordinate
+  // space, which already has the sticky label column's width (LABEL_W) baked into it.
+  // The visible timeline area only starts at scrollLeft + LABEL_W (the label column
+  // stays pinned there via position:sticky), so LABEL_W has to be subtracted back out
+  // — otherwise "today" lands LABEL_W too far right and ends up hidden behind the
+  // label column instead of just past it.
+  const todayLeft = parseFloat(bar.style.left);
+  const visibleTimelineWidth = Math.max(0, scroll.clientWidth - LABEL_W);
+  const leadIn = Math.min(150, visibleTimelineWidth / 3); // a bit of context before "today"
+  scroll.scrollLeft = Math.max(0, todayLeft - LABEL_W - leadIn);
 });
 
 /* =========================================================================
