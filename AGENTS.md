@@ -40,6 +40,20 @@ Any change you make must preserve it.
      changes".
    - `CHANGELOG.md`'s `[Unreleased]` section for anything user-visible.
    - `backlog.md`, update status as you go rather than letting it drift from reality.
+
+   **Before running `git commit`, answer this explicitly, not just hold it as intent:** does this
+   change need a `CHANGELOG.md` entry, and does a `backlog.md` item need its checkbox flipped or
+   its status updated? If yes to either, they go in *this* commit. A commit message, however
+   detailed, is not a substitute for either file. A commit message lives in git history, which
+   nobody reads to find out what shipped or what's still open; `CHANGELOG.md` and `backlog.md` are
+   what a reader actually checks, and they only work if they're current. When working through a
+   list of several changes in one session, this check applies to *every single one of them
+   individually*, not once at the end of the list. This was written after a real miss: five
+   sequential bug-fix commits in one session, each thoroughly tested and thoroughly described in
+   its own commit message, and only the fifth one touched `backlog.md` (incidentally, not because
+   the rule was followed) and none of the five touched `CHANGELOG.md` until a sixth, separate
+   corrective commit was needed. The instruction existed the whole time; it just wasn't applied
+   under the momentum of moving through a list.
 4. **If a reported bug doesn't reproduce** after a genuine attempt, say so plainly: "I can't
    reproduce this, here's what I tried," rather than guessing at a change and calling it fixed.
 
