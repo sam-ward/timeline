@@ -110,6 +110,33 @@ shipped in `v1.0.1`; see `CHANGELOG.md` for details.
      whole table, since it isn't `table-layout:fixed`. Fixed with a
      fixed `min-width` on the chip so its box size — and the column
      width — never changes regardless of count or lag state.
+7. [ ] **Needs a design discussion before any code.** The Task List's
+   `<table>` doesn't set `table-layout:fixed`, so every column's width is
+   computed from content across *every* row rather than being pinned per
+   column. The Deps chip `min-width:70px` fix above works but is a
+   one-off patch on the one instance that got noticed, not a fix to the
+   underlying cause — worth a proper pass over the whole table rather
+   than whack-a-mole-ing each symptom as it's found. Two known examples,
+   for whoever picks this up:
+   - The Deps chip reflow itself (see above): any row's cell content
+     getting wider than every other row's shifts the column, and
+     everything after it, sideways.
+   - The % Done column doesn't render the same shape of content for
+     every row: milestone rows show a checkbox + "Done" label
+     (`.milestone-done-stack`), regular task rows show a number input +
+     progress bar (`.pct-cell`). Different natural widths for the two
+     shapes mean the numbers/checkboxes don't line up horizontally with
+     each other across rows of different types, which reads as sloppy
+     even though each individual row is laid out correctly on its own.
+
+   Likely direction: explicit per-column widths (a `<colgroup>` and
+   `table-layout:fixed`, or min/max-width rules disciplined enough to
+   have the same effect) so column geometry is a property of the table,
+   not an emergent side-effect of whatever happens to be in each cell —
+   but that needs auditing every column (not just these two examples)
+   for what its content actually requires, and deciding how overflow
+   should behave for each one (truncate? wrap? scroll?) rather than
+   just patching the two instances above.
 
 ## Broader / process (tackling first)
 
