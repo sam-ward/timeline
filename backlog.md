@@ -23,6 +23,12 @@ Changelog and remove from here once released).
    actually need the columns narrower to work). In progress on
    `feature/dependency-lag`, not yet merged; see `CHANGELOG.md`'s
    `[Unreleased]` section.
+2. [ ] Task edit modal: the RAG status color dot is not vertically
+   aligned with the status text next to it (`.status-select-wrap
+   .status-dot` is `position:absolute; left:11px;` with no `top`/
+   vertical-centering rule, so it just sits at its default static
+   position rather than actually being centered against the `<select>`'s
+   text — worth checking as the likely cause when this gets picked up).
 
 The previous batch (Gantt "Today" scroll, RAG red/amber contrast, live
 status dot, arrow-key focus loss, stale selection-highlight repaint)
