@@ -171,9 +171,8 @@ Cheapest/safest first, biggest last.
    knowing it. Fixed by having the hover tooltip show the full name
    and full hierarchy path (e.g. "Phase 2 › Backend › API Endpoints")
    rather than widening the picker, which would've reopened the
-   popover-width/scrollbar issues fixed earlier. In progress on
-   `quick-wins/deps-popover-and-export`, not yet merged; see
-   `CHANGELOG.md`'s `[Unreleased]` section.
+   popover-width/scrollbar issues fixed earlier. Merged to `main`, not
+   yet released; see `CHANGELOG.md`'s `[Unreleased]` section.
 7. [ ] Reordering tasks with the up/down move buttons means chasing the
    button with the cursor as the row moves (the button moves with its
    row, so a rapid sequence of clicks needs the cursor to keep
@@ -198,8 +197,7 @@ Cheapest/safest first, biggest last.
    close (×) button in the popover header, and Escape key support
    (matching how modals already close via `teOnKeydown`). Applied to
    the Dashboard's resource-filter popover too, since it's the same
-   underlying component. In progress on
-   `quick-wins/deps-popover-and-export`, not yet merged; see
+   underlying component. Merged to `main`, not yet released; see
    `CHANGELOG.md`'s `[Unreleased]` section.
 10. [ ] Gantt: collapsing a parent row hides its children entirely,
     including any milestones among them — so a milestone belonging to a
@@ -220,9 +218,8 @@ Cheapest/safest first, biggest last.
     unrelated leftover that capped the whole page regardless of window
     size, while the Gantt content already has its own inner
     `overflow:auto` wrapper for wide date ranges — the outer cap wasn't
-    doing anything useful. Removed. In progress on
-    `quick-wins/deps-popover-and-export`, not yet merged; see
-    `CHANGELOG.md`'s `[Unreleased]` section.
+    doing anything useful. Removed. Merged to `main`, not yet released;
+    see `CHANGELOG.md`'s `[Unreleased]` section.
 13. [ ] Visual indicator for the *reverse* dependency direction: a task
     that other tasks depend on currently shows nothing to flag that;
     only the dependent task's own Deps chip shows anything, and only
