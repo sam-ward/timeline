@@ -26,22 +26,21 @@ Changelog and remove from here once released).
    the one exception. Fixed by deferring the Gantt/Dashboard re-render
    to `change` (blur), same pattern as everything else — the data model
    and the Task List's own dirty-dot still update live on every
-   keystroke, only the two expensive full-rebuilds are deferred. In
-   progress on `fix/name-typing-lag`, not yet merged; see
-   `CHANGELOG.md`'s `[Unreleased]` section.
-3. [ ] No warning before an action overwrites/loses existing task data.
-   **Triaged, root cause confirmed and worse than expected:** any task
-   that gains its *first* child (via the row's ➕ "Add subtask" button,
-   or via indenting a task under a previously-childless sibling)
-   instantly becomes a parent, and `recalcAll()`'s rollup pass
-   **overwrites its `start`/`end`/`duration`/`percentComplete`/
-   `resources` in place**, computed from children. If the task already
-   had its own values set, they're genuinely gone, not just hidden —
-   there's no undo. Decision: add a confirmation dialog before the
-   destructive cases (add-sub or indent onto a task that already has
-   non-default data set), naming what will be lost. Covers both
-   triggers in one fix. Build together with Improvement 4 (same code
-   area, same underlying problem).
+   keystroke, only the two expensive full-rebuilds are deferred. Merged
+   to `main`, not yet released; see `CHANGELOG.md`'s `[Unreleased]`
+   section.
+3. [x] No warning before an action overwrites/loses existing task data.
+   Root cause confirmed and worse than expected: any task that gains
+   its *first* child (via the row's ➕ "Add subtask" button, or via
+   indenting a task under a previously-childless sibling) instantly
+   becomes a parent, and `recalcAll()`'s rollup pass **overwrites its
+   `start`/`end`/`duration`/`percentComplete`/`resources` in place**,
+   computed from children. If the task already had its own values set,
+   they're genuinely gone, not just hidden — there's no undo. Fixed
+   with a confirmation dialog before the destructive cases (add-sub or
+   indent onto a task that already has non-default data set), naming
+   what will be lost. In progress on `fix/parent-data-loss-warning`,
+   not yet merged; see `CHANGELOG.md`'s `[Unreleased]` section.
 
 The previous batches (Gantt "Today" scroll, RAG red/amber contrast, live
 status dot, arrow-key focus loss, stale selection-highlight repaint,
@@ -151,15 +150,17 @@ Cheapest/safest first, biggest last.
      genuinely open — flagged as "not sure if it could be represented
      there" when this was raised, worth thinking through rather than
      assuming yes.
-4. [ ] The row's ➕ button should be able to add a **sibling** (same
-   level/depth), not only a sub-task. **Triaged:** the button is
-   currently labeled "Add subtask" and does exactly that, so just
-   changing its default behavior would make the label lie. Decision:
-   split into **two buttons** — "+ task" (sibling, same depth) and
-   "+ sub" (child, current behavior) — so creating a sub-task becomes a
+4. [x] The row's ➕ button should be able to add a **sibling** (same
+   level/depth), not only a sub-task. The button was labeled "Add
+   subtask" and did exactly that, so changing its default behavior
+   would have made the label lie. Split into **two buttons** instead —
+   ➕ (sibling, same depth, bigger icon since it's the everyday action)
+   and `+` (child, current behavior, smaller icon since it's now the
+   less-common, guarded action) — so creating a sub-task is a
    deliberate choice rather than the default outcome of the one button
-   everyone reaches for. Build together with Bug 3's warning dialog
-   (same code area, same underlying problem).
+   everyone reaches for. Built together with Bug 3's warning dialog. In
+   progress on `fix/parent-data-loss-warning`, not yet merged; see
+   `CHANGELOG.md`'s `[Unreleased]` section.
 5. [ ] A way to **insert** a new task mid-list, at a specific position,
    rather than only ever appending at the bottom and having to move it
    up into place afterward.
