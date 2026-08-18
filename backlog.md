@@ -40,8 +40,8 @@ Changelog and remove from here once released).
    with a confirmation dialog (`confirmParentOverwrite()`) before both
    destructive cases, naming what will be lost; no-ops silently for a
    task that's still on defaults (nothing at stake). Built together
-   with Improvement 4. In progress on `fix/parent-data-loss-warning`,
-   not yet merged; see `CHANGELOG.md`'s `[Unreleased]` section.
+   with Improvement 4. Merged to `main`, not yet released; see
+   `CHANGELOG.md`'s `[Unreleased]` section.
 
 The previous batches (Gantt "Today" scroll, RAG red/amber contrast, live
 status dot, arrow-key focus loss, stale selection-highlight repaint,
@@ -161,8 +161,8 @@ Cheapest/safest first, biggest last.
    action, now goes through Bug 3's warning) — so creating a sub-task
    is a deliberate choice rather than the default outcome of the one
    button everyone reaches for. Built together with Bug 3's warning
-   dialog. In progress on `fix/parent-data-loss-warning`, not yet
-   merged; see `CHANGELOG.md`'s `[Unreleased]` section.
+   dialog. Merged to `main`, not yet released; see `CHANGELOG.md`'s
+   `[Unreleased]` section.
 5. [ ] A way to **insert** a new task mid-list, at a specific position,
    rather than only ever appending at the bottom and having to move it
    up into place afterward.
