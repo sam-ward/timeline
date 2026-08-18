@@ -173,9 +173,11 @@ end) and otherwise names what would be lost before proceeding. If you add anothe
 give a task its first child, route it through the same check — the overwrite itself doesn't care how
 the child got there, so neither should the warning.
 
-The row also has two separate "add" buttons, `+` (`add-sibling`, same depth as the clicked row —
-`addTask(id)`, no `asChildOf`) and `➕` (`add-sub`, current row becomes the parent —
-`addTask(null, id)`, goes through the warning above). They used to be one button that only ever
+The row also has two separate "add" buttons, `➕` (`add-sibling`, same depth as the clicked row —
+`addTask(id)`, no `asChildOf`) and `+` (`add-sub`, current row becomes the parent —
+`addTask(null, id)`, goes through the warning above) — the bigger icon on the everyday action
+(sibling), the smaller one on the less-common, now-guarded action (sub-task). They used to be one
+button that only ever
 added a sub-task, which made the destructive path the default outcome of the button everyone reaches
 for just to add the next task; splitting it out doesn't fix the overwrite by itself (indenting is
 still a path to it) but removes the most common trigger.
