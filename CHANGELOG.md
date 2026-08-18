@@ -7,12 +7,26 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+### Added
+
+- Task List: the row's "add subtask" (➕) button is now two buttons —
+  ➕ adds a task at the same level as the row it's clicked from, `+`
+  adds a sub-task. Creating a sub-task is now a deliberate choice
+  instead of the default outcome of the one button everyone reaches
+  for to add the next task.
+
 ### Fixed
 
 - Task List: typing a task's name could get noticeably laggy, worse
   the larger the schedule. Every keystroke was fully re-rendering the
   Gantt chart and Dashboard; both now update once typing pauses (on
   blur), the same as every other field already worked.
+- A task with its own duration, progress, or assigned resources set
+  would silently lose them the moment it gained its first sub-task or
+  was indented under a previously-childless sibling — both turn it
+  into a parent, whose fields get overwritten by a rollup from its
+  children with no undo. Both actions now confirm first, naming what
+  would be lost, when there's actually something at stake.
 
 ## [1.1.1] - 2026-08-13
 

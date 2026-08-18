@@ -160,6 +160,28 @@ Any task that has at least one other task pointing `parentId` at it becomes a su
 percent, union of resources). The UI disables editing these fields directly on a parent row; see
 `hasChildren(t.id)` checks throughout `renderTaskTable()` and `openTaskEditModal()`.
 
+**Gotcha, and the reason `confirmParentOverwrite()` exists:** the *moment* a childless task gains
+its first child, this overwrite kicks in immediately — a task that had a real 5-day duration, 60%
+progress, and an assigned resource silently loses all three (the new rollup is derived from a
+single fresh empty child: 1-day duration, 0%, no resources) the instant it becomes a parent. This
+was a real, reported bug: it happens from the row's "add subtask" (➕) button, and equally from
+`indentTask()` when a task is indented underneath a previously-childless sibling (that sibling
+becomes the new parent). There's no undo, so both call sites now confirm first via
+`confirmParentOverwrite(t)` (`TASK MUTATIONS` section), which no-ops silently if `t` has nothing at
+stake (`wouldLoseDataAsParent()`: still on defaults — 1-day duration, 0%, no resources, no manual
+end) and otherwise names what would be lost before proceeding. If you add another code path that can
+give a task its first child, route it through the same check — the overwrite itself doesn't care how
+the child got there, so neither should the warning.
+
+The row also has two separate "add" buttons, `➕` (`add-sibling`, same depth as the clicked row —
+`addTask(id)`, no `asChildOf`) and `+` (`add-sub`, current row becomes the parent —
+`addTask(null, id)`, goes through the warning above) — the bigger icon on the everyday action
+(sibling), the smaller one on the less-common, now-guarded action (sub-task). They used to be one
+button that only ever
+added a sub-task, which made the destructive path the default outcome of the button everyone reaches
+for just to add the next task; splitting it out doesn't fix the overwrite by itself (indenting is
+still a path to it) but removes the most common trigger.
+
 ## The scheduling engine: `recalcAll()`
 
 This is the most important function in the codebase. Everything that changes a task's data calls

@@ -1695,6 +1695,36 @@ function recalcAll(){
 /* =========================================================================
    TASK MUTATIONS
    ========================================================================= */
+
+/** Whether giving `t` its first child would silently overwrite meaningful data. A task with no
+ *  children yet has its own start/end/duration/percentComplete/resources; the moment it gains a
+ *  child, recalcAll()'s parent-rollup pass overwrites all of those in place with values derived
+ *  from its children (initially just the one freshly-added, empty-default child), permanently —
+ *  there's no undo. Only worth warning about if there's something non-default to actually lose;
+ *  a brand-new task (1-day duration, 0%, no resources, no manual end) has nothing at stake. */
+function wouldLoseDataAsParent(t){
+  if(!t || hasChildren(t.id)) return false; // already a parent — nothing new to lose
+  return (t.percentComplete||0) !== 0 || (t.resources||[]).length > 0 || !!t.manualEnd || (t.duration||1) !== 1;
+}
+/** Human-readable summary of what would be lost, for the confirmation prompt. */
+function describeTaskDataForWarning(t){
+  const bits = [];
+  if((t.duration||1) !== 1 || t.manualEnd) bits.push(`${t.duration}-day duration`);
+  if((t.percentComplete||0) !== 0) bits.push(`${t.percentComplete}% complete`);
+  if((t.resources||[]).length) bits.push(`${t.resources.join(', ')} assigned`);
+  return bits.join(', ');
+}
+/** Confirms before an action that would make `t` a parent for the first time, if doing so would
+ *  overwrite data it already has. Returns true if it's safe to proceed (either nothing would be
+ *  lost, or the user confirmed anyway). */
+function confirmParentOverwrite(t){
+  if(!wouldLoseDataAsParent(t)) return true;
+  return confirm(
+    `"${displayName(t)}" currently has ${describeTaskDataForWarning(t)}. Adding a sub-task will ` +
+    `replace these with values rolled up from its children. Continue?`
+  );
+}
+
 function addTask(afterId, asChildOf){
   const t = normalizeTask({
     name: '',
@@ -1771,6 +1801,9 @@ function indentTask(id){
   const pos = sibs.findIndex(s=>s.id===id);
   if(pos<=0) return; // no previous sibling to become a child of
   const newParent = sibs[pos-1];
+  // indenting under a previously-childless sibling makes IT a parent for the first time — same
+  // silent-overwrite risk as adding a sub-task, so the same warning applies here too
+  if(!confirmParentOverwrite(newParent)) return;
   t.parentId = newParent.id;
   t.collapsed = false;
   newParent.collapsed = false;
@@ -1935,7 +1968,8 @@ function renderTaskTable(){
     // --- row actions ---
     const tdActions = document.createElement('td');
     tdActions.innerHTML = `<div class="row-actions">
-        <button class="icon-btn" data-act="add-sub" title="Add subtask">➕</button>
+        <button class="icon-btn" data-act="add-sibling" title="Add task (same level)">➕</button>
+        <button class="icon-btn" data-act="add-sub" title="Add subtask">+</button>
         <button class="icon-btn danger" data-act="delete" title="Delete task">🗑</button>
       </div>`;
     tr.appendChild(tdActions);
@@ -2013,7 +2047,8 @@ document.getElementById('task-tbody').addEventListener('click', (e)=>{
   else if(act==='indent') indentTask(id);
   else if(act==='outdent') outdentTask(id);
   else if(act==='toggle'){ byId(id).collapsed = !byId(id).collapsed; renderAll(); }
-  else if(act==='add-sub') addTask(null, id);
+  else if(act==='add-sibling') addTask(id);
+  else if(act==='add-sub'){ if(confirmParentOverwrite(byId(id))) addTask(null, id); }
   else if(act==='delete') deleteTask(id);
   else if(act==='deps') openDepsPopover(btn, id);
   else if(act==='notes') openNotesModal(id);

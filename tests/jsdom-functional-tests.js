@@ -133,6 +133,75 @@ async function main() {
       ganttLabel().textContent.includes('Renamed mid-typing'));
   }
 
+  console.log('\n--- Parent-overwrite warning (Bug: silent data loss) ---');
+  {
+    // A task with real data set: adding a sub-task via the row's "+ sub" button should warn
+    // first, since recalcAll()'s rollup pass would silently overwrite it.
+    const withData = D.addTask(null);
+    withData.name = 'Has real data';
+    withData.duration = 5;
+    withData.percentComplete = 60;
+    withData.resources = ['Alice'];
+    D.recalcAll();
+    window.renderAll();
+    await wait(20);
+
+    let confirmCalled = false;
+    window.confirm = () => { confirmCalled = true; return false; }; // simulate clicking Cancel
+    const subBtn = doc.querySelector(`tr[data-id="${withData.id}"] [data-act="add-sub"]`);
+    subBtn.click();
+    check('warning dialog shown before overwriting a task with real data', confirmCalled);
+    check('cancelling the warning leaves the task childless (nothing lost)', !D.hasChildren(withData.id));
+
+    window.confirm = () => true; // simulate confirming anyway
+    subBtn.click(); // same DOM node — cancelling above didn't re-render, so it's still valid
+    check('confirming the warning proceeds with adding the sub-task', D.hasChildren(withData.id));
+
+    // A fresh, all-default task has nothing at stake — shouldn't prompt at all.
+    const fresh = D.addTask(null);
+    fresh.name = 'Fresh task, nothing to lose';
+    D.recalcAll();
+    window.renderAll();
+    await wait(20);
+    let confirmCalledForFresh = false;
+    window.confirm = () => { confirmCalledForFresh = true; return true; };
+    doc.querySelector(`tr[data-id="${fresh.id}"] [data-act="add-sub"]`).click();
+    check('no warning for a task with nothing to lose', !confirmCalledForFresh);
+    check('sub-task is still created in that case', D.hasChildren(fresh.id));
+
+    // The row's "+ task" button should add a SIBLING (same parentId), not a child.
+    const original = D.addTask(null);
+    original.name = 'Original, for sibling-button test';
+    D.recalcAll();
+    window.renderAll();
+    await wait(20);
+    const idsBefore = new Set(D.state.tasks.map(x=>x.id));
+    doc.querySelector(`tr[data-id="${original.id}"] [data-act="add-sibling"]`).click();
+    const newSibling = D.state.tasks.find(x=>!idsBefore.has(x.id));
+    check('"+ task" button creates a sibling, not a sub-task',
+      newSibling && newSibling.parentId === original.parentId);
+
+    // Indenting a task under a previously-childless sibling with real data is the other trigger
+    // for the same silent-overwrite bug — same warning should apply there too.
+    const a = D.addTask(null); a.name = 'Indent target (has data)'; a.percentComplete = 40;
+    const b = D.addTask(null); b.name = 'Being indented under it';
+    D.recalcAll();
+    window.renderAll();
+    await wait(20);
+    let confirmCalledForIndent = false;
+    window.confirm = () => { confirmCalledForIndent = true; return false; };
+    const indentBtn = doc.querySelector(`tr[data-id="${b.id}"] [data-act="indent"]`);
+    indentBtn.click();
+    check('indenting under a sibling with real data also warns', confirmCalledForIndent);
+    check('cancelling leaves the indent from happening', b.parentId !== a.id);
+
+    window.confirm = () => true;
+    indentBtn.click();
+    check('confirming proceeds with the indent', b.parentId === a.id);
+
+    window.confirm = () => true; // restore the default for the rest of the suite
+  }
+
   console.log('\n--- Dependency lag ---');
   {
     const p = D.addTask(null);
