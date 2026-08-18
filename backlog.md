@@ -40,8 +40,8 @@ Changelog and remove from here once released).
    with a confirmation dialog (`confirmParentOverwrite()`) before both
    destructive cases, naming what will be lost; no-ops silently for a
    task that's still on defaults (nothing at stake). Built together
-   with Improvement 4. In progress on `fix/parent-data-loss-warning`,
-   not yet merged; see `CHANGELOG.md`'s `[Unreleased]` section.
+   with Improvement 4. Merged to `main`, not yet released; see
+   `CHANGELOG.md`'s `[Unreleased]` section.
 
 The previous batches (Gantt "Today" scroll, RAG red/amber contrast, live
 status dot, arrow-key focus loss, stale selection-highlight repaint,
@@ -161,16 +161,19 @@ Cheapest/safest first, biggest last.
    action, now goes through Bug 3's warning) — so creating a sub-task
    is a deliberate choice rather than the default outcome of the one
    button everyone reaches for. Built together with Bug 3's warning
-   dialog. In progress on `fix/parent-data-loss-warning`, not yet
-   merged; see `CHANGELOG.md`'s `[Unreleased]` section.
+   dialog. Merged to `main`, not yet released; see `CHANGELOG.md`'s
+   `[Unreleased]` section.
 5. [ ] A way to **insert** a new task mid-list, at a specific position,
    rather than only ever appending at the bottom and having to move it
    up into place afterward.
-6. [ ] Dependency picker (popover and modal): long task names get
+6. [x] Dependency picker (popover and modal): long task names get
    truncated and there's no way to see the full name without already
-   knowing it. Either widen the picker, or have the hover tooltip show
-   the full name and/or the task's full hierarchy path (e.g.
-   "Phase 2 > Backend > API Endpoints").
+   knowing it. Fixed by having the hover tooltip show the full name
+   and full hierarchy path (e.g. "Phase 2 › Backend › API Endpoints")
+   rather than widening the picker, which would've reopened the
+   popover-width/scrollbar issues fixed earlier. In progress on
+   `quick-wins/deps-popover-and-export`, not yet merged; see
+   `CHANGELOG.md`'s `[Unreleased]` section.
 7. [ ] Reordering tasks with the up/down move buttons means chasing the
    button with the cursor as the row moves (the button moves with its
    row, so a rapid sequence of clicks needs the cursor to keep
@@ -190,11 +193,14 @@ Cheapest/safest first, biggest last.
    substitutes for the other (single-row nudge vs. whole-subtree
    relocation); revisit once 7 is built and it's clearer whether the
    rarer bulk-relocation case still needs its own mechanism.
-9. [ ] No way to cancel/close the dependency popover except by moving
-   focus to another field (e.g. clicking elsewhere). Needs an explicit
-   dismiss: a close (×) button, Escape key support, or both — similar
-   to how modals already close on Escape (`teOnKeydown`), which the
-   popover doesn't currently have.
+9. [x] No way to cancel/close the dependency popover except by moving
+   focus to another field (e.g. clicking elsewhere). Fixed with both: a
+   close (×) button in the popover header, and Escape key support
+   (matching how modals already close via `teOnKeydown`). Applied to
+   the Dashboard's resource-filter popover too, since it's the same
+   underlying component. In progress on
+   `quick-wins/deps-popover-and-export`, not yet merged; see
+   `CHANGELOG.md`'s `[Unreleased]` section.
 10. [ ] Gantt: collapsing a parent row hides its children entirely,
     including any milestones among them — so a milestone belonging to a
     collapsed subtree, and the dependency arrows connecting it to other
@@ -208,8 +214,15 @@ Cheapest/safest first, biggest last.
     add/edit tags (Task List cell? edit modal?), and a filter mechanism
     on the Dashboard alongside (or combined with) the existing resource
     filter.
-12. [ ] **Low priority.** The static HTML export doesn't scale to fill
+12. [x] **Low priority.** The static HTML export doesn't scale to fill
     the window width cleanly — looks mostly, but not quite, fixed-width.
+    Root cause: `.export-section` had a stray `max-width:1400px`,
+    unrelated leftover that capped the whole page regardless of window
+    size, while the Gantt content already has its own inner
+    `overflow:auto` wrapper for wide date ranges — the outer cap wasn't
+    doing anything useful. Removed. In progress on
+    `quick-wins/deps-popover-and-export`, not yet merged; see
+    `CHANGELOG.md`'s `[Unreleased]` section.
 13. [ ] Visual indicator for the *reverse* dependency direction: a task
     that other tasks depend on currently shows nothing to flag that;
     only the dependent task's own Deps chip shows anything, and only

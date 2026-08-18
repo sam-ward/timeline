@@ -14,6 +14,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
   adds a sub-task. Creating a sub-task is now a deliberate choice
   instead of the default outcome of the one button everyone reaches
   for to add the next task.
+- Dependency picker (Task List popover and task edit modal): hovering
+  a truncated task name now shows the full name and its complete
+  hierarchy path (e.g. "Phase 2 › Backend › API Endpoints").
+- Both dependency popovers can now be closed with a × button or the
+  Escape key, not just by clicking elsewhere.
 
 ### Fixed
 
@@ -27,6 +32,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
   into a parent, whose fields get overwritten by a rollup from its
   children with no undo. Both actions now confirm first, naming what
   would be lost, when there's actually something at stake.
+- Static HTML export no longer stops growing at 1400px regardless of
+  how wide the browser window is — sections now fill the available
+  width on wider screens instead of leaving dead space on the right.
 
 ## [1.1.1] - 2026-08-13
 

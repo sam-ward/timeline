@@ -604,6 +604,28 @@ rebuilds its entire DOM (and loses the filter text) every time a checkbox is tog
 `openDepsPopover()` calls itself again to refresh. This is a pre-existing, purposeful simplicity
 trade-off, not an oversight.
 
+`.dep-name` still ellipsis-truncates against the popover's narrow width, so a long or
+deeply-nested name can be impossible to read in full from the row alone. `bindDepNameTooltips()`
+binds a hover tooltip (the shared `bindHoverTooltip()` engine) to every `.dep-name[data-task-id]`
+in a container, showing `taskHierarchyPath(id)` — the full name plus every ancestor's, root-first
+(`Phase 2 › Backend › API Endpoints`). Called once after the rows are actually in the DOM (both
+`bindHoverTooltip()` and `data-task-id` lookups need real elements, not the markup string
+`depRowHtml()` returns), which in the popover's case means every reopen, same as the filter/lag
+wiring above; in the modal it's a one-time call at open time, since checkbox toggles there patch
+existing row DOM in place rather than rebuilding it.
+
+**Gotcha: a popover needs its own close affordance, not just outside-click.** Both dependency
+popovers (Task List Deps chip, Dashboard resource filter) used to be dismissible only by clicking
+elsewhere — no close button, no Escape, unlike every modal in the app (which all support Escape via
+`teOnKeydown` or equivalent). Fixed with a shared `closePopoverFully()` plus one global `keydown`
+listener for Escape (added once, not per-open — it's a no-op whenever `#popover-root` is empty, so
+it can't fire while a modal's own Escape handling is active instead) and a `.popover-close` (×)
+button in each popover's header. The two popovers' own outside-click handlers
+(`outsidePopoverClick`/`outsideResourcePopoverClick`) now route through the same
+`closePopoverFully()` too, via a single `activePopoverOutsideHandler` reference, rather than each
+managing its own listener removal — only one popover is ever open at a time, so there's no need for
+the close path to know which one it's closing.
+
 **Gotcha: popover horizontal clamping must match the real CSS max-width, not an approximation.**
 `openDepsPopover()` and `openResourceFilterPopover()` (Dashboard) both position a floating
 `.popover` via `popoverLeftClamp(rect)`, which clamps the left edge so the box can never render
@@ -767,6 +789,15 @@ JS and no editable elements. A Mermaid-diagram export was attempted and removed 
 wasn't good enough); if revisiting that idea, note that Mermaid's `gantt` diagrams don't support
 multi-level task nesting, partial-percent progress, or resource swimlanes, so it needs real
 simplification decisions, not a direct translation.
+
+**Gotcha: don't cap `.export-section`'s width.** It used to have `max-width:1400px`, which meant
+the exported page stopped growing past that regardless of how wide the browser window actually was
+— on anything wider (an ultrawide or a maximized window on a large monitor), that left dead space
+on the right instead of the content filling it, a real reported complaint. Removed; the section now
+just fills `body`'s own width (which itself is unconstrained, only padded). This is safe specifically
+because the Gantt content already has its own inner `overflow:auto` wrapper
+(`buildStaticGanttHtml()`) for genuinely wide date ranges — the outer section never needed to be the
+thing providing width-limiting/scroll behavior, it was just an unrelated leftover constraint.
 
 ## Why a single file?
 
