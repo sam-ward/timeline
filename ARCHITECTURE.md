@@ -428,10 +428,19 @@ Early versions of this app called `renderAll()` on every keystroke in a text/num
 typed**, a real bug that came up during development. The fix, and the pattern to follow for any new
 editable field: text/number/date fields commit their value on the `change` event (fires on blur), not
 `input`. The `input` listener on `#task-tbody` only updates state directly for fields where a full
-re-render isn't needed (`name`, which updates Gantt/Dashboard titles live without touching the table)
-or gives a cheap visual-only preview (the % progress bar fill, updated live via direct style
-manipulation without touching state or re-rendering). See the two listeners on `#task-tbody` in the
-`RENDER: TASK TABLE` section for the exact split.
+re-render isn't needed, or gives a cheap visual-only preview (the % progress bar fill, updated live
+via direct style manipulation without touching state or re-rendering). See the two listeners on
+`#task-tbody` in the `RENDER: TASK TABLE` section for the exact split.
+
+**`name` is a partial exception, and a second real bug came from getting the split wrong.** The task's
+own row already shows every keystroke live for free (it's the same `<input>` the user is typing into),
+so `t.name` and `markDirty()` update on every `input` event — that part's cheap. But an earlier version
+*also* called `renderGantt()` + `renderDashboard()` on every keystroke here, to keep the task's name
+current on Gantt bars/labels and Dashboard cards. Both are full HTML/SVG rebuilds (~400 lines each),
+so retyping a name got visibly laggier the larger the schedule got — a real, reported bug. Name now
+follows the same commit-on-`change` split as every other field for the *render* half specifically
+(data write stays live, render is deferred to blur), which is why it needs its own branch in both
+listeners rather than fitting cleanly into either "fully live" or "fully deferred."
 
 Checkboxes (manual-end toggle, the milestone Done checkbox) don't have this problem: there's no
 "typing" to interrupt, so they commit on `change` immediately, same as before.

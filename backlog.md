@@ -17,17 +17,18 @@ Changelog and remove from here once released).
    vertical-centering rule, so it just sits at its default static
    position rather than actually being centered against the `<select>`'s
    text — worth checking as the likely cause when this gets picked up).
-2. [ ] Task List UI can get noticeably laggy when typing a new task's
-   name. **Triaged, root cause confirmed:** every keystroke in the name
-   field calls `renderGantt()` and `renderDashboard()` in full
-   (`#task-tbody`'s `input` handler) — both rebuild their entire
-   HTML/SVG from scratch (~400 lines each), on every character. Every
-   other field (resources, dates, duration) already defers this to
-   blur/`change`; name is the one exception. Gets worse as the schedule
-   grows, which matches the reported symptom. Fix: defer the Gantt/
-   Dashboard re-render to blur like the other fields, same pattern
-   already established. Build first (cheapest, safest, no open
-   questions).
+2. [x] Task List UI can get noticeably laggy when typing a new task's
+   name. Root cause confirmed: every keystroke in the name field called
+   `renderGantt()` and `renderDashboard()` in full (`#task-tbody`'s
+   `input` handler) — both rebuild their entire HTML/SVG from scratch
+   (~400 lines each), on every character. Every other field (resources,
+   dates, duration) already deferred this to blur/`change`; name was
+   the one exception. Fixed by deferring the Gantt/Dashboard re-render
+   to `change` (blur), same pattern as everything else — the data model
+   and the Task List's own dirty-dot still update live on every
+   keystroke, only the two expensive full-rebuilds are deferred. In
+   progress on `fix/name-typing-lag`, not yet merged; see
+   `CHANGELOG.md`'s `[Unreleased]` section.
 3. [ ] No warning before an action overwrites/loses existing task data.
    **Triaged, root cause confirmed and worse than expected:** any task
    that gains its *first* child (via the row's ➕ "Add subtask" button,
