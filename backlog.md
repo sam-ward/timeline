@@ -18,20 +18,29 @@ Changelog and remove from here once released).
    position rather than actually being centered against the `<select>`'s
    text — worth checking as the likely cause when this gets picked up).
 2. [ ] Task List UI can get noticeably laggy when typing a new task's
-   name. Not yet investigated (candidates: the per-keystroke re-render
-   path in the `#task-tbody` `input` handler, or something re-running
-   more work than it needs to on every character).
+   name. **Triaged, root cause confirmed:** every keystroke in the name
+   field calls `renderGantt()` and `renderDashboard()` in full
+   (`#task-tbody`'s `input` handler) — both rebuild their entire
+   HTML/SVG from scratch (~400 lines each), on every character. Every
+   other field (resources, dates, duration) already defers this to
+   blur/`change`; name is the one exception. Gets worse as the schedule
+   grows, which matches the reported symptom. Fix: defer the Gantt/
+   Dashboard re-render to blur like the other fields, same pattern
+   already established. Build first (cheapest, safest, no open
+   questions).
 3. [ ] No warning before an action overwrites/loses existing task data.
-   Two known triggers, raised together since they're the same underlying
-   problem: adding a sub-task to a task that already has its own
-   duration/dates/resources/etc. set silently overwrites some of that
-   (parent fields become derived rollups from children); moving a task
-   around can do the same thing by accident. Needs a look at exactly
-   what `addTask()`/indent/move do to a row's existing fields, and
-   whether a confirmation, an undo, or preventing the destructive
-   version of the action in the first place (see Improvement 0 below,
-   which would sidestep the sub-task case specifically) is the right
-   fix.
+   **Triaged, root cause confirmed and worse than expected:** any task
+   that gains its *first* child (via the row's ➕ "Add subtask" button,
+   or via indenting a task under a previously-childless sibling)
+   instantly becomes a parent, and `recalcAll()`'s rollup pass
+   **overwrites its `start`/`end`/`duration`/`percentComplete`/
+   `resources` in place**, computed from children. If the task already
+   had its own values set, they're genuinely gone, not just hidden —
+   there's no undo. Decision: add a confirmation dialog before the
+   destructive cases (add-sub or indent onto a task that already has
+   non-default data set), naming what will be lost. Covers both
+   triggers in one fix. Build together with Improvement 4 (same code
+   area, same underlying problem).
 
 The previous batches (Gantt "Today" scroll, RAG red/amber contrast, live
 status dot, arrow-key focus loss, stale selection-highlight repaint,
@@ -43,6 +52,12 @@ in `v1.0.1`, `v1.1.0`, and `v1.1.1`; see `CHANGELOG.md` for details.
 Copy/paste discoverability, drag-and-drop open, the Dashboard Upcoming
 split, the About update badge, and dependency lag (plus its follow-up
 fixes) shipped in `v1.1.0`; see `CHANGELOG.md` for details.
+
+**Build order agreed for the current batch** (Bugs 2-3 above plus the
+Improvements below, triaged together): Bug 2 (typing lag) → Bug 3 +
+Improvement 4 (warning dialog + two buttons) → quick wins (6, 9, 12) →
+mediums (5, 7, 10, 13) → Improvement 11 (tags) last, being the largest.
+Cheapest/safest first, biggest last.
 
 1. [ ] **Needs a design discussion before any code.** Support durations
    smaller than 1 working day (e.g. half-days). Looked into the scope: the
@@ -97,7 +112,10 @@ fixes) shipped in `v1.1.0`; see `CHANGELOG.md` for details.
    but that needs auditing every column (not just these two examples)
    for what its content actually requires, and deciding how overflow
    should behave for each one (truncate? wrap? scroll?) rather than
-   just patching the two instances above.
+   just patching the two instances above. A later report ("the grid is
+   still wonky — need fixed row heights and column widths, with enough
+   space and correct alignment, everywhere") is the same underlying
+   ask; folded in here rather than tracked as a separate item.
 3. [ ] **Needs a design discussion before any code — exploratory.** Explore
    identifying the **critical path** through a schedule, both as data and
    as an optional/toggleable visual element. Not scoped yet; open
@@ -132,14 +150,15 @@ fixes) shipped in `v1.1.0`; see `CHANGELOG.md` for details.
      genuinely open — flagged as "not sure if it could be represented
      there" when this was raised, worth thinking through rather than
      assuming yes.
-4. [ ] The "+ Task" button should add the new task as a **sibling**
-   (same level/depth as the row it was added from), not as a sub-task.
-   Raised as a fix for accidental data loss: adding a sub-task to a row
-   silently turns that row into a parent whose fields become derived
-   rollups, overwriting whatever was there before (see Bug 3 above) —
-   defaulting "+ Task" to sibling-level sidesteps that entirely, since
-   creating a sub-task would then be a separate, deliberate action
-   rather than the default outcome of the everyday "add a task" button.
+4. [ ] The row's ➕ button should be able to add a **sibling** (same
+   level/depth), not only a sub-task. **Triaged:** the button is
+   currently labeled "Add subtask" and does exactly that, so just
+   changing its default behavior would make the label lie. Decision:
+   split into **two buttons** — "+ task" (sibling, same depth) and
+   "+ sub" (child, current behavior) — so creating a sub-task becomes a
+   deliberate choice rather than the default outcome of the one button
+   everyone reaches for. Build together with Bug 3's warning dialog
+   (same code area, same underlying problem).
 5. [ ] A way to **insert** a new task mid-list, at a specific position,
    rather than only ever appending at the bottom and having to move it
    up into place afterward.
@@ -154,14 +173,19 @@ fixes) shipped in `v1.1.0`; see `CHANGELOG.md` for details.
    relocating). Possible directions: arrow-key reordering with a
    modifier key while a row is focused/selected, or a dedicated
    "rearrange mode" that decouples clicking from the row's own
-   in-place buttons.
+   in-place buttons. **Triaged:** build this one now (solves the
+   everyday single-row-nudge case well, smaller change); Improvement 8
+   stays parked rather than building both at once. Exact mechanism
+   (modifier+arrow vs. rearrange mode) still to be decided at
+   implementation time.
 8. [ ] Bulk-relocate a task and its whole subtask group at once (copy/
    paste, cut/paste, or some other mechanism), as an alternative to
    one-at-a-time up/down moves for restructuring a chunk of the
-   schedule. Related to Improvement 7 above (both about the general
-   "moving tasks around is currently tedious" problem) but a different
-   mechanism — worth deciding whether one supersedes the other or both
-   are worth having.
+   schedule. **Triaged:** parked in favor of Improvement 7 for now —
+   both solve "moving tasks around is tedious" but neither really
+   substitutes for the other (single-row nudge vs. whole-subtree
+   relocation); revisit once 7 is built and it's clearer whether the
+   rarer bulk-relocation case still needs its own mechanism.
 9. [ ] No way to cancel/close the dependency popover except by moving
    focus to another field (e.g. clicking elsewhere). Needs an explicit
    dismiss: a close (×) button, Escape key support, or both — similar
@@ -180,16 +204,9 @@ fixes) shipped in `v1.1.0`; see `CHANGELOG.md` for details.
     add/edit tags (Task List cell? edit modal?), and a filter mechanism
     on the Dashboard alongside (or combined with) the existing resource
     filter.
-12. [ ] **Low priority.** The Task List grid still isn't fully clean:
-    fixed row heights and column widths, with enough space and correct
-    alignment, everywhere. Overlaps with Improvement 2 above (the
-    `table-layout:fixed` design-discussion item) — likely the same
-    underlying fix, not a separate piece of work; consider folding this
-    into that item when it's picked up rather than treating them
-    independently.
-13. [ ] **Low priority.** The static HTML export doesn't scale to fill
+12. [ ] **Low priority.** The static HTML export doesn't scale to fill
     the window width cleanly — looks mostly, but not quite, fixed-width.
-14. [ ] Visual indicator for the *reverse* dependency direction: a task
+13. [ ] Visual indicator for the *reverse* dependency direction: a task
     that other tasks depend on currently shows nothing to flag that;
     only the dependent task's own Deps chip shows anything, and only
     from that task's side. Needs a way to see, from a given task, that
