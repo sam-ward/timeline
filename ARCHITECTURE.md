@@ -341,6 +341,22 @@ regardless of `scrollbar-width`/`::-webkit-scrollbar` CSS — the fix is correct
 (padding reserves clearance unconditionally) rather than screenshot-verified; flag for a real check
 on Windows/Linux Chrome or Firefox if this needs revisiting.
 
+### Reverse dependencies ("Blocks")
+
+`predecessors` only stores the forward edge (a task knows what it depends on; nothing points back).
+There's no reverse-edge list kept in sync anywhere, so `dependentsOf(id)` — "every task that depends
+on this one" — is a plain scan (`state.tasks.filter(t => (t.predecessors||[]).some(link=>link.id===id))`)
+rather than a lookup. Fine at the scale this app deals with; don't reach for a cached/indexed
+version unless a real schedule shows it's actually slow.
+
+Surfaced in two places, both read-only (no UI writes to the reverse direction — you still add a
+dependency from the *dependent* task's own Deps picker, same as before):
+- The Task List's `.blocks-badge` in the name cell (`🔗N`, hover for the full list) — same
+  reserved-space-regardless-of-content trick as the Deps chip above (`min-width:34px`, always
+  rendered even when empty), for the same table-reflow reason.
+- The Gantt hover tooltip (`buildGanttTooltipHtml()`) gets a "Blocks" section, same row style as
+  the Deps popover's own listing, whenever `dependentsOf(t.id)` is non-empty.
+
 ### Why can't a task depend on its own ancestor?
 
 If a task depends on one of its own parents (directly or transitively), you get a genuine circular
@@ -657,6 +673,20 @@ If you change how bars, milestones, or dependency arrows are drawn, you likely n
 `renderGantt()` and `buildGanttTimelineHtml()`. They intentionally share the same visual language
 (CSS class names) but are separate implementations, since the interactive view has concerns (hover
 tooltips, live DOM event binding, viewport-fill-on-resize) that the static one doesn't.
+
+### Keyboard reordering (Ctrl+Shift+Up/Down)
+
+A separate `keydown` listener on `#task-tbody` (not merged into the date-copy/paste one above,
+which bails out immediately for anything that isn't a date input) reorders the focused row among
+its siblings via `moveTask()`, from anywhere within the row — the name field, a date field, one of
+the row's own buttons. Added because the row's own ↑/↓ buttons move *with* the row on every click,
+so a rapid sequence of reorders means physically chasing them with the cursor; the keyboard path
+doesn't have that problem since it doesn't depend on the mouse being anywhere in particular.
+`moveTask()` already no-ops silently at either end of the sibling list (no `swapWith`), so the
+keyboard handler doesn't duplicate that bounds-checking. After the move, it refocuses the *same*
+field (by `data-field`) or button (by `data-act`) on the row's new DOM node — `moveTask()` calls
+`renderAll()`, which rebuilds the table and destroys the original node, so without this a keyboard-
+only reordering session would lose focus after the first move.
 
 ### Printing the Gantt chart: why a separate popup window
 

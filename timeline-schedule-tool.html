@@ -289,6 +289,15 @@ table#task-table{
 .col-name{min-width:220px;}
 .name-wrap{display:flex; align-items:center; gap:4px;}
 .milestone-mark{color:var(--accent); font-size:11px; flex:none;}
+/* Reverse-dependency indicator ("N tasks depend on this"). Always occupies the same reserved
+   width whether or not it has content (see the Deps-chip ARCHITECTURE.md gotcha on table-layout
+   reflow from content that only sometimes takes up space) — cheap insurance since .col-name is
+   the table's stretchiest column anyway and this sits right at its trailing edge. */
+.blocks-badge{
+  flex:none; min-width:34px; text-align:right; font-size:10.5px; font-family:var(--font-mono);
+  color:var(--text-mute);
+}
+.blocks-badge:not(:empty){cursor:default;}
 .status-dot{
   display:inline-block; width:11px; height:11px; border-radius:50%; vertical-align:middle;
   border:1.5px solid transparent; box-sizing:border-box; flex:none;
@@ -1511,6 +1520,10 @@ document.getElementById('sched-title-display').addEventListener('click', ()=>{
 function byId(id){ return state.tasks.find(t=>t.id===id); }
 function childrenOf(id){ return state.tasks.filter(t=>t.parentId===id); }
 function hasChildren(id){ return state.tasks.some(t=>t.parentId===id); }
+/** Reverse of a task's own `predecessors`: every other task that depends ON `id`. There's no
+ *  stored reverse-edge list (predecessors only point one way), so this is a scan — fine at the
+ *  scale this app deals with (see the Deps chip for the forward direction, this is its mirror). */
+function dependentsOf(id){ return state.tasks.filter(t=>(t.predecessors||[]).some(link=>link.id===id)); }
 /** A milestone is a zero-duration task — a single point in time rather than a span, rendered as a
  *  marker instead of a bar. Duration 0 is the trigger; resources being empty is the typical case
  *  for a milestone but isn't required (e.g. "Alice signs off" can still name an owner). */
@@ -1898,12 +1911,21 @@ function renderTaskTable(){
     tdName.className = 'col-name';
     const twisty = hasChildren(t.id) ? `<button class="twisty" data-act="toggle">${t.collapsed?'▶':'▼'}</button>` : `<span class="twisty"></span>`;
     const milestoneMark = isMilestone(t) ? `<span class="milestone-mark" title="Milestone">◆</span>` : '';
+    const dependents = dependentsOf(t.id);
     tdName.innerHTML = `<div class="name-wrap" style="padding-left:${depth*16}px;">
         ${twisty}
         ${milestoneMark}
         <input class="cell-input name-input" data-field="name" placeholder="New task" value="${escapeAttr(t.name)}">
+        <span class="blocks-badge">${dependents.length?`🔗${dependents.length}`:''}</span>
       </div>`;
     tr.appendChild(tdName);
+    if(dependents.length){
+      bindHoverTooltip(tdName.querySelector('.blocks-badge'), ()=>{
+        let html = `<div class="tt-title">Blocks (${dependents.length})</div>`;
+        html += dependents.map(d=>`<div class="tt-row"><b>${escapeHtml(displayName(d))}</b></div>`).join('');
+        return html;
+      });
+    }
 
     // --- status ---
     const tdStatus = document.createElement('td');
@@ -2026,6 +2048,10 @@ function buildGanttTooltipHtml(t){
   html += `<div class="tt-label">Resources</div><div class="tt-meta">${(t.resources&&t.resources.length)?escapeHtml(t.resources.join(', ')):'<span class="tt-empty">unassigned</span>'}</div>`;
   if(t.description) html += `<div class="tt-label">Description</div><div class="tt-section">${escapeHtml(t.description)}</div>`;
   if(t.notes) html += `<div class="tt-label">Notes</div><div class="tt-section">${escapeHtml(t.notes)}</div>`;
+  const dependents = dependentsOf(t.id);
+  if(dependents.length){
+    html += `<div class="tt-label">Blocks</div>` + dependents.map(d=>`<div class="tt-row"><b>${escapeHtml(displayName(d))}</b></div>`).join('');
+  }
   html += `<div class="tt-label" style="margin-top:8px; text-transform:none; letter-spacing:0;">Double-click to edit</div>`;
   return html;
 }
@@ -2080,6 +2106,31 @@ document.getElementById('task-tbody').addEventListener('keydown', (e)=>{
     e.target.classList.add('date-copied-flash');
     setTimeout(()=>e.target.classList.remove('date-copied-flash'), 350);
   }
+});
+
+// Ctrl+Shift+Up/Down reorders the focused row among its siblings, from anywhere within the row
+// (name field, a date field, one of the row's own buttons) — added because the row's own up/down
+// buttons move with the row on every click, so a rapid sequence of reorders means the cursor has
+// to keep chasing them. moveTask() already no-ops silently at either end of the sibling list (no
+// swapWith), same as clicking the buttons there does, so no extra bounds-checking needed here.
+document.getElementById('task-tbody').addEventListener('keydown', (e)=>{
+  if(!e.ctrlKey || !e.shiftKey || (e.key!=='ArrowUp' && e.key!=='ArrowDown')) return;
+  const tr = e.target.closest('tr');
+  if(!tr) return;
+  e.preventDefault();
+  const taskId = tr.dataset.id;
+  const fieldName = e.target.dataset && e.target.dataset.field;
+  const actName = e.target.dataset && e.target.dataset.act;
+  moveTask(taskId, e.key==='ArrowUp' ? -1 : 1);
+  // moveTask() rebuilds the whole table — refocus the equivalent field/button in the row's new
+  // position (if it still exists; a boundary no-op leaves the same row in place either way) so a
+  // keyboard-only reordering session doesn't lose focus after the first move.
+  const freshRow = document.querySelector(`tr[data-id="${taskId}"]`);
+  const fresh = freshRow && (
+    fieldName ? freshRow.querySelector(`[data-field="${fieldName}"]`) :
+    actName ? freshRow.querySelector(`[data-act="${actName}"]`) : null
+  );
+  if(fresh) fresh.focus();
 });
 
 document.getElementById('task-tbody').addEventListener('input', (e)=>{
