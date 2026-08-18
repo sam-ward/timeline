@@ -42,7 +42,7 @@ const DEBUG_EXPORTS = [
   'state', 'byId', 'addTask', 'recalcAll', 'isMilestone', 'sanitizeDuration',
   'addWorkingDays', 'countWorkingDays', 'hasChildren', 'childrenOf',
   'eligiblePredecessorIds', 'serialize', 'loadFromText', 'allResources',
-  'classifyTask', 'stepWorkingDays', 'normalizeTask'
+  'classifyTask', 'stepWorkingDays', 'normalizeTask', 'taskHierarchyPath'
 ];
 
 function wait(ms) { return new Promise(r => setTimeout(r, ms)); }
@@ -282,6 +282,18 @@ async function main() {
     const eligible = D.eligiblePredecessorIds(child.id);
     check("a task's own ancestor is excluded from its eligible predecessor list",
       !eligible.includes(parent.id));
+  }
+
+  console.log('\n--- Dependency picker hierarchy tooltip ---');
+  {
+    // Used for the "full name + path" hover tooltip on truncated dependency-picker rows.
+    const grandparent = D.addTask(null); grandparent.name = 'Phase 2: Build';
+    const parent2 = D.addTask(null, grandparent.id); parent2.name = 'Backend';
+    const leaf = D.addTask(null, parent2.id); leaf.name = 'API Endpoints';
+    check('taskHierarchyPath() is root-first, joined with the path separator',
+      D.taskHierarchyPath(leaf.id) === 'Phase 2: Build › Backend › API Endpoints');
+    check('a top-level task with no ancestors is just its own name',
+      D.taskHierarchyPath(grandparent.id) === 'Phase 2: Build');
   }
 
   console.log('\n--- Parent (summary) task rollup ---');

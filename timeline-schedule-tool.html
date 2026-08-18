@@ -375,7 +375,13 @@ input.res-input{width:100%; min-width:100px; overflow:hidden; text-overflow:elli
   position:absolute; z-index:100; background:var(--paper); border:1px solid var(--line-strong);
   border-radius:8px; box-shadow:0 8px 24px rgba(20,25,35,.18); padding:10px; min-width:220px; max-width:300px;
 }
-.popover h4{margin:0 0 6px; font-size:11px; text-transform:uppercase; color:var(--text-mute); letter-spacing:.4px;}
+.popover-head{display:flex; align-items:center; gap:8px; margin-bottom:6px;}
+.popover-head h4{margin:0; font-size:11px; text-transform:uppercase; color:var(--text-mute); letter-spacing:.4px;}
+.popover-close{
+  margin-left:auto; flex:none; background:none; border:none; color:var(--text-mute); font-size:16px;
+  line-height:1; padding:0 2px; cursor:pointer;
+}
+.popover-close:hover{color:var(--text);}
 .popover-filter{
   width:100%; box-sizing:border-box; padding:5px 8px; margin-bottom:6px; border:1px solid var(--line-strong);
   border-radius:5px; font-size:12px; background:var(--paper); color:var(--text);
@@ -1309,7 +1315,7 @@ body{ padding:28px; overflow:auto; height:auto; }
 .export-header{ margin-bottom:20px; }
 .export-header h1{ font-family:var(--font-mono); font-size:20px; margin:0 0 4px; }
 .export-header .meta{ color:var(--text-mute); font-size:12px; }
-.export-section{ background:var(--paper); border:1px solid var(--line); border-radius:10px; padding:16px; margin-bottom:22px; max-width:1400px; }
+.export-section{ background:var(--paper); border:1px solid var(--line); border-radius:10px; padding:16px; margin-bottom:22px; }
 .export-section h2{ font-size:12px; text-transform:uppercase; letter-spacing:.4px; color:var(--text-mute); margin:0 0 12px; }
 </style>
 </head>
@@ -2173,6 +2179,25 @@ document.getElementById('btn-add-task').addEventListener('click', ()=>addTask(nu
 /* =========================================================================
    POPOVER: dependencies
    ========================================================================= */
+
+/** Closes whichever popover is currently open (deps or resource-filter — only one can be open at
+ *  a time, both render into #popover-root) and cleans up its outside-click listener. Shared so
+ *  the close button and Escape key don't need to know which popover is actually open. */
+let activePopoverOutsideHandler = null;
+function closePopoverFully(){
+  closePopover();
+  if(activePopoverOutsideHandler){
+    document.removeEventListener('click', activePopoverOutsideHandler);
+    activePopoverOutsideHandler = null;
+  }
+}
+// Previously the only way to dismiss a popover was clicking elsewhere (moving focus to another
+// field) — no close button, no Escape support, unlike every modal in the app. Escape is handled
+// once here globally rather than per-open, since at most one popover exists at a time; it's a
+// no-op whenever #popover-root is empty, so it can't interfere with a modal's own Escape handling.
+document.addEventListener('keydown', (e)=>{
+  if(e.key === 'Escape' && document.getElementById('popover-root').firstElementChild) closePopoverFully();
+});
 function closePopover(){ document.getElementById('popover-root').innerHTML = ''; }
 
 // Clamps a popover's left edge so it can never render past the right edge of the viewport.
@@ -2189,6 +2214,23 @@ function popoverLeftClamp(rect){
 /* ---- shared dependency-row markup + lag interaction, used by both openDepsPopover() and
    openTaskEditModal() — see the "Dependency pickers" section of ARCHITECTURE.md ---- */
 
+/** Full hierarchy path for a task, root-first (e.g. "Phase 2 › Backend › API Endpoints"). Used in
+ *  the dependency picker's hover tooltip: `.dep-name` ellipsis-truncates against the popover's
+ *  narrow width, and long/deeply-nested names otherwise have no way to be seen in full. */
+function taskHierarchyPath(id){
+  const chain = [...ancestorIds(id)].reverse().map(aid => displayName(byId(aid)));
+  chain.push(displayName(byId(id)));
+  return chain.join(' › ');
+}
+/** Binds the hover tooltip (full hierarchy path) to every row's name within a dependency-picker
+ *  container. Must run after the rows are actually in the DOM — bindHoverTooltip() attaches to
+ *  real elements, not the markup string depRowHtml() returns. */
+function bindDepNameTooltips(container){
+  if(!container) return;
+  container.querySelectorAll('.dep-name[data-task-id]').forEach(el=>{
+    bindHoverTooltip(el, ()=>`<div class="tt-title">${escapeHtml(taskHierarchyPath(el.dataset.taskId))}</div>`);
+  });
+}
 /** One candidate row: a checkbox, the task's name (indented by tree depth), and — only once
  *  checked — its lag control. Unchecked rows show a plain, non-interactive end date (informational
  *  only: lag doesn't apply until the dependency actually exists). `checkboxClass` lets each caller
@@ -2199,7 +2241,7 @@ function depRowHtml(id, checked, lag, checkboxClass){
   const trailing = checked
     ? `<span class="dep-lag-wrap" data-dep-id="${id}">${depLagRestingHtml(ot, lag)}</span>`
     : `<span class="dep-date">${fmtDate(ot.end)}</span>`;
-  return `<label class="pop-row${checked?' checked':''}" data-filter-text="${escapeAttr(displayName(ot).toLowerCase())}"><input type="checkbox" class="${checkboxClass||''}" value="${id}" ${checked?'checked':''}> <span class="dep-name" style="padding-left:${indent}px;">${escapeHtml(displayName(ot))}</span>${trailing}</label>`;
+  return `<label class="pop-row${checked?' checked':''}" data-filter-text="${escapeAttr(displayName(ot).toLowerCase())}"><input type="checkbox" class="${checkboxClass||''}" value="${id}" ${checked?'checked':''}> <span class="dep-name" data-task-id="${id}" style="padding-left:${indent}px;">${escapeHtml(displayName(ot))}</span>${trailing}</label>`;
 }
 /** Resting state of a checked row's lag control: the date, plus a small "+Nd"/"-Nd" badge once a
  *  non-zero lag is set. Both are click targets (`data-dep-lag-toggle`) that reveal the stepper. */
@@ -2268,10 +2310,12 @@ function openDepsPopover(anchorBtn, taskId){
   }).join('') : `<div class="pop-empty">No other tasks available yet.</div>`;
 
   root.innerHTML = `<div class="popover" style="top:${rect.bottom+window.scrollY+4}px; left:${popoverLeftClamp(rect)}px;">
-      <h4>Depends on (finish → start)</h4>
+      <div class="popover-head"><h4>Depends on (finish → start)</h4><button type="button" class="popover-close" title="Close (Esc)">&times;</button></div>
       ${options.length>4?'<input type="text" class="popover-filter" placeholder="Filter tasks...">':''}
       <div class="popover-rows">${rowsHtml}</div>
     </div>`;
+  root.querySelector('.popover-close').addEventListener('click', closePopoverFully);
+  bindDepNameTooltips(root.querySelector('.popover-rows'));
   const filterInput = root.querySelector('.popover-filter');
   if(filterInput){
     filterInput.addEventListener('input', ()=>{
@@ -2305,13 +2349,13 @@ function openDepsPopover(anchorBtn, taskId){
       renderAll(); // safe while the popover is open — renderAll() never touches #popover-root
     }
   });
-  setTimeout(()=>document.addEventListener('click', outsidePopoverClick), 0);
+  setTimeout(()=>{
+    activePopoverOutsideHandler = outsidePopoverClick;
+    document.addEventListener('click', activePopoverOutsideHandler);
+  }, 0);
 }
 function outsidePopoverClick(e){
-  if(!e.target.closest('.popover') && !e.target.closest('[data-act="deps"]')){
-    closePopover();
-    document.removeEventListener('click', outsidePopoverClick);
-  }
+  if(!e.target.closest('.popover') && !e.target.closest('[data-act="deps"]')) closePopoverFully();
 }
 
 /* =========================================================================
@@ -2497,6 +2541,7 @@ function openTaskEditModal(taskId){
     getLag: id => { const link = pendingLink(id); return link ? link.lag : 0; },
     onLagChange: (id, newLag) => { const link = pendingLink(id); if(link) link.lag = Math.round(newLag); }
   });
+  bindDepNameTooltips(document.getElementById('te-dep-rows'));
 
   const depFilterInput = document.getElementById('te-dep-filter');
   if(depFilterInput){
@@ -2972,13 +3017,14 @@ function openResourceFilterPopover(anchorBtn){
   }).join('') : `<div class="pop-empty">No resources assigned to any task yet.</div>`;
 
   root.innerHTML = `<div class="popover" style="top:${rect.bottom+window.scrollY+4}px; left:${popoverLeftClamp(rect)}px;">
-      <h4>Filter by resource</h4>
+      <div class="popover-head"><h4>Filter by resource</h4><button type="button" class="popover-close" title="Close (Esc)">&times;</button></div>
       <div class="popover-rows">${rowsHtml}</div>
       ${resources.length?`<div style="display:flex; gap:6px; margin-top:8px; padding-top:8px; border-top:1px solid var(--line);">
         <button class="sm-btn" id="res-filter-all" style="flex:1;">Select all</button>
         <button class="sm-btn" id="res-filter-none" style="flex:1;">Clear</button>
       </div>`:''}
     </div>`;
+  root.querySelector('.popover-close').addEventListener('click', closePopoverFully);
 
   function applyAndRerender(){
     updateResourceFilterButton();
@@ -3002,13 +3048,13 @@ function openResourceFilterPopover(anchorBtn){
     applyAndRerender();
     openResourceFilterPopover(document.getElementById('dash-resource-btn'));
   });
-  setTimeout(()=>document.addEventListener('click', outsideResourcePopoverClick), 0);
+  setTimeout(()=>{
+    activePopoverOutsideHandler = outsideResourcePopoverClick;
+    document.addEventListener('click', activePopoverOutsideHandler);
+  }, 0);
 }
 function outsideResourcePopoverClick(e){
-  if(!e.target.closest('.popover') && e.target.id!=='dash-resource-btn'){
-    closePopover();
-    document.removeEventListener('click', outsideResourcePopoverClick);
-  }
+  if(!e.target.closest('.popover') && e.target.id!=='dash-resource-btn') closePopoverFully();
 }
 document.getElementById('dash-resource-btn').addEventListener('click', (e)=>openResourceFilterPopover(e.currentTarget));
 document.getElementById('dash-content').addEventListener('dblclick', (e)=>{
