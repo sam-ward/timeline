@@ -163,28 +163,30 @@ Cheapest/safest first, biggest last.
    button everyone reaches for. Built together with Bug 3's warning
    dialog. Merged to `main`, not yet released; see `CHANGELOG.md`'s
    `[Unreleased]` section.
-5. [ ] A way to **insert** a new task mid-list, at a specific position,
+5. [x] A way to **insert** a new task mid-list, at a specific position,
    rather than only ever appending at the bottom and having to move it
-   up into place afterward.
+   up into place afterward. Resolved incidentally by Improvement 4: the
+   row's sibling-add button now inserts right after the clicked row,
+   not at the end of the list, so inserting mid-list is just "click
+   the button on the row above where you want it." No separate work
+   needed; confirmed with the user rather than assumed.
 6. [x] Dependency picker (popover and modal): long task names get
    truncated and there's no way to see the full name without already
    knowing it. Fixed by having the hover tooltip show the full name
    and full hierarchy path (e.g. "Phase 2 › Backend › API Endpoints")
    rather than widening the picker, which would've reopened the
-   popover-width/scrollbar issues fixed earlier. In progress on
-   `quick-wins/deps-popover-and-export`, not yet merged; see
-   `CHANGELOG.md`'s `[Unreleased]` section.
-7. [ ] Reordering tasks with the up/down move buttons means chasing the
+   popover-width/scrollbar issues fixed earlier. Merged to `main`, not
+   yet released; see `CHANGELOG.md`'s `[Unreleased]` section.
+7. [x] Reordering tasks with the up/down move buttons means chasing the
    button with the cursor as the row moves (the button moves with its
    row, so a rapid sequence of clicks needs the cursor to keep
-   relocating). Possible directions: arrow-key reordering with a
-   modifier key while a row is focused/selected, or a dedicated
-   "rearrange mode" that decouples clicking from the row's own
-   in-place buttons. **Triaged:** build this one now (solves the
-   everyday single-row-nudge case well, smaller change); Improvement 8
-   stays parked rather than building both at once. Exact mechanism
-   (modifier+arrow vs. rearrange mode) still to be decided at
-   implementation time.
+   relocating). Fixed with Ctrl/Cmd+Shift+↑/↓, working from anywhere in
+   the focused row (not just a specific field), refocusing the same
+   field/button on the row's new position after each move so a
+   keyboard-only reordering session doesn't lose focus. Improvement 8
+   stays parked. In progress on
+   `mediums/reorder-insert-collapse-reverse-dep`, not yet merged; see
+   `CHANGELOG.md`'s `[Unreleased]` section.
 8. [ ] Bulk-relocate a task and its whole subtask group at once (copy/
    paste, cut/paste, or some other mechanism), as an alternative to
    one-at-a-time up/down moves for restructuring a chunk of the
@@ -198,15 +200,20 @@ Cheapest/safest first, biggest last.
    close (×) button in the popover header, and Escape key support
    (matching how modals already close via `teOnKeydown`). Applied to
    the Dashboard's resource-filter popover too, since it's the same
-   underlying component. In progress on
-   `quick-wins/deps-popover-and-export`, not yet merged; see
+   underlying component. Merged to `main`, not yet released; see
    `CHANGELOG.md`'s `[Unreleased]` section.
-10. [ ] Gantt: collapsing a parent row hides its children entirely,
+10. [x] Gantt: collapsing a parent row hides its children entirely,
     including any milestones among them — so a milestone belonging to a
     collapsed subtree, and the dependency arrows connecting it to other
-    tasks, both disappear. Needs some way to keep milestones (at least)
-    visible on the collapsed summary row, with their dependency lines
-    still drawn.
+    tasks, both disappear. Fixed by rolling hidden milestones up onto
+    the collapsed row (a small ringed marker at the milestone's own
+    date), with dependency arrows resolved to that row too. Scoped to
+    milestones specifically, not every hidden task — a milestone has a
+    marker to anchor an arrow to; a hidden regular task has no sensible
+    place a line could point at. Works through nested collapsed levels
+    too. In progress on
+    `mediums/reorder-insert-collapse-reverse-dep`, not yet merged; see
+    `CHANGELOG.md`'s `[Unreleased]` section.
 11. [ ] Tags on tasks (e.g. `PO`, `DOC`) for filtering/grouping in
     reporting contexts — the example given was tagging purchase-order
     items or deliverable documents so they can be filtered to on the
@@ -220,14 +227,18 @@ Cheapest/safest first, biggest last.
     unrelated leftover that capped the whole page regardless of window
     size, while the Gantt content already has its own inner
     `overflow:auto` wrapper for wide date ranges — the outer cap wasn't
-    doing anything useful. Removed. In progress on
-    `quick-wins/deps-popover-and-export`, not yet merged; see
-    `CHANGELOG.md`'s `[Unreleased]` section.
-13. [ ] Visual indicator for the *reverse* dependency direction: a task
+    doing anything useful. Removed. Merged to `main`, not yet released;
+    see `CHANGELOG.md`'s `[Unreleased]` section.
+13. [x] Visual indicator for the *reverse* dependency direction: a task
     that other tasks depend on currently shows nothing to flag that;
     only the dependent task's own Deps chip shows anything, and only
-    from that task's side. Needs a way to see, from a given task, that
-    something else relies on it finishing.
+    from that task's side. Fixed with a small "🔗N" badge next to the
+    task's name (hover for the list of what it blocks), plus a
+    "Blocks" section in the Gantt hover tooltip. Read-only — you still
+    add a dependency from the dependent task's own Deps picker, same as
+    before. In progress on
+    `mediums/reorder-insert-collapse-reverse-dep`, not yet merged; see
+    `CHANGELOG.md`'s `[Unreleased]` section.
 
 ## Broader / process (tackling first)
 

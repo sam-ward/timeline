@@ -19,6 +19,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
   hierarchy path (e.g. "Phase 2 › Backend › API Endpoints").
 - Both dependency popovers can now be closed with a × button or the
   Escape key, not just by clicking elsewhere.
+- Task List: reorder a task with Ctrl/Cmd+Shift+↑/↓ from anywhere in
+  its row, instead of only via the row's own ↑/↓ buttons (which move
+  with the row, so repeated clicks mean chasing them with the cursor).
+- Task List: a task that other tasks depend on now shows a small
+  "🔗N" badge next to its name (hover for the list of what it
+  blocks) — previously only visible from the dependent task's own
+  side. Also added to the Gantt hover tooltip.
+- Gantt chart: collapsing a group no longer hides its milestones
+  entirely. Each one now rolls up onto the collapsed row as a small
+  ringed marker at its own date, with its dependency arrows still
+  drawn, instead of just disappearing along with the rest of the
+  folded-away subtree.
 
 ### Fixed
 

@@ -314,6 +314,22 @@
       "predecessors": [],
       "parentId": null,
       "collapsed": false
+    },
+    {
+      "id": "misc-post-launch-review",
+      "name": "Post-Launch Review",
+      "description": "Depends on ph3-launch ('Go Live'), a milestone inside the already-collapsed 'Phase 3: Launch' branch — exercises the Gantt's collapsed-row milestone rollup: with Phase 3 collapsed, 'Go Live' should still render as a small ringed diamond marker on Phase 3's own collapsed bar (not vanish), with a dependency arrow still drawn from that marker to this task.",
+      "notes": "",
+      "resources": [],
+      "duration": 2,
+      "start": "2026-06-01",
+      "end": null,
+      "manualEnd": false,
+      "percentComplete": 0,
+      "status": null,
+      "predecessors": ["ph3-launch"],
+      "parentId": null,
+      "collapsed": false
     }
   ]
 }

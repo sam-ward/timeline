@@ -42,7 +42,8 @@ const DEBUG_EXPORTS = [
   'state', 'byId', 'addTask', 'recalcAll', 'isMilestone', 'sanitizeDuration',
   'addWorkingDays', 'countWorkingDays', 'hasChildren', 'childrenOf',
   'eligiblePredecessorIds', 'serialize', 'loadFromText', 'allResources',
-  'classifyTask', 'stepWorkingDays', 'normalizeTask', 'taskHierarchyPath'
+  'classifyTask', 'stepWorkingDays', 'normalizeTask', 'taskHierarchyPath',
+  'moveTask', 'dependentsOf'
 ];
 
 function wait(ms) { return new Promise(r => setTimeout(r, ms)); }
@@ -272,6 +273,61 @@ async function main() {
       a.resources[0] === b.resources[0]);
     check('allResources() reports one person, not two', D.allResources().length ===
       new Set(D.state.tasks.flatMap(t => t.resources || [])).size);
+  }
+
+  console.log('\n--- Reverse-dependency indicator ("Blocks") ---');
+  {
+    const p = D.addTask(null); p.name = 'Blocker task';
+    const c1 = D.addTask(null); c1.name = 'Blocked task 1'; c1.predecessors = [{id: p.id, lag: 0}];
+    const c2 = D.addTask(null); c2.name = 'Blocked task 2'; c2.predecessors = [{id: p.id, lag: 0}];
+    D.recalcAll();
+    window.renderAll();
+    await wait(20);
+
+    check('dependentsOf() finds both tasks depending on the blocker',
+      D.dependentsOf(p.id).length === 2 &&
+      D.dependentsOf(p.id).map(t=>t.name).includes('Blocked task 1') &&
+      D.dependentsOf(p.id).map(t=>t.name).includes('Blocked task 2'));
+    check('a task nothing depends on has an empty dependents list',
+      D.dependentsOf(c1.id).length === 0);
+
+    const badge = doc.querySelector(`tr[data-id="${p.id}"] .blocks-badge`);
+    check('the blocker\'s row shows a non-empty "blocks" badge', badge.textContent.trim() === '🔗2');
+    const badgeC1 = doc.querySelector(`tr[data-id="${c1.id}"] .blocks-badge`);
+    check('a task with no dependents shows an empty badge (reserved space, no content)',
+      badgeC1.textContent.trim() === '');
+  }
+
+  console.log('\n--- Keyboard reordering (Ctrl+Shift+Up/Down) ---');
+  {
+    const x = D.addTask(null); x.name = 'Reorder X';
+    const y = D.addTask(null); y.name = 'Reorder Y';
+    const z = D.addTask(null); z.name = 'Reorder Z';
+    D.recalcAll();
+    window.renderAll();
+    await wait(20);
+
+    const orderNow = () => D.childrenOf(null).filter(t=>['Reorder X','Reorder Y','Reorder Z'].includes(t.name)).map(t=>t.name);
+    check('starting order is X, Y, Z', orderNow().join(',') === 'Reorder X,Reorder Y,Reorder Z');
+
+    const zNameInput = doc.querySelector(`tr[data-id="${z.id}"] [data-field="name"]`);
+    zNameInput.focus();
+    zNameInput.dispatchEvent(new window.KeyboardEvent('keydown', {key:'ArrowUp', ctrlKey:true, shiftKey:true, bubbles:true}));
+    check('Ctrl+Shift+Up moves the focused row up one position', orderNow().join(',') === 'Reorder X,Reorder Z,Reorder Y');
+
+    // moveTask() rebuilds the table, so the original input node is gone — the handler should have
+    // refocused the *same field* on the row's new DOM node, not left focus stranded on nothing.
+    const refocused = doc.activeElement;
+    check('focus follows the row to its new position after the move',
+      refocused && refocused.dataset.field === 'name' && refocused.closest('tr').dataset.id === z.id);
+
+    refocused.dispatchEvent(new window.KeyboardEvent('keydown', {key:'ArrowUp', ctrlKey:true, shiftKey:true, bubbles:true}));
+    check('a second Ctrl+Shift+Up (now at the front) moves it to first position',
+      orderNow().join(',') === 'Reorder Z,Reorder X,Reorder Y');
+
+    doc.activeElement.dispatchEvent(new window.KeyboardEvent('keydown', {key:'ArrowUp', ctrlKey:true, shiftKey:true, bubbles:true}));
+    check('Ctrl+Shift+Up at the very top is a silent no-op, same as the disabled boundary case',
+      orderNow().join(',') === 'Reorder Z,Reorder X,Reorder Y');
   }
 
   console.log('\n--- Circular dependency prevention ---');

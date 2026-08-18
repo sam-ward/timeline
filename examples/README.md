@@ -35,7 +35,11 @@ and read the descriptions in the edit modal / hover tooltips as you go.
   derived from the date range instead of the other way around.
 - **Holidays**: a few dates set, one of which falls inside a task's date
   range, to check Gantt shading and that they're skipped in duration math.
-- **Collapsed state**: `Phase 3` saves/loads already collapsed.
+- **Collapsed state**: `Phase 3` saves/loads already collapsed. Its milestone
+  child (`ph3-launch`, "Go Live") should still render as a small ringed
+  diamond rolled up onto Phase 3's own collapsed Gantt bar rather than just
+  disappearing, with a dependency arrow still drawn to `misc-post-launch-review`
+  (which depends on it, outside the collapsed branch).
 - **Edge cases**: a blank task name (checks the `displayName()` fallback to
   "Untitled task" in read-only views vs. the placeholder in editable
   fields) and a deliberately long task name (checks wrapping/truncation).
