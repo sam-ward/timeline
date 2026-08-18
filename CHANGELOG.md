@@ -26,6 +26,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
   "🔗N" badge next to its name (hover for the list of what it
   blocks) — previously only visible from the dependent task's own
   side. Also added to the Gantt hover tooltip.
+- Gantt chart: collapsing a group no longer hides its milestones
+  entirely. Each one now rolls up onto the collapsed row as a small
+  ringed marker at its own date, with its dependency arrows still
+  drawn, instead of just disappearing along with the rest of the
+  folded-away subtree.
 
 ### Fixed
 

@@ -202,12 +202,18 @@ Cheapest/safest first, biggest last.
    the Dashboard's resource-filter popover too, since it's the same
    underlying component. Merged to `main`, not yet released; see
    `CHANGELOG.md`'s `[Unreleased]` section.
-10. [ ] Gantt: collapsing a parent row hides its children entirely,
+10. [x] Gantt: collapsing a parent row hides its children entirely,
     including any milestones among them — so a milestone belonging to a
     collapsed subtree, and the dependency arrows connecting it to other
-    tasks, both disappear. Needs some way to keep milestones (at least)
-    visible on the collapsed summary row, with their dependency lines
-    still drawn.
+    tasks, both disappear. Fixed by rolling hidden milestones up onto
+    the collapsed row (a small ringed marker at the milestone's own
+    date), with dependency arrows resolved to that row too. Scoped to
+    milestones specifically, not every hidden task — a milestone has a
+    marker to anchor an arrow to; a hidden regular task has no sensible
+    place a line could point at. Works through nested collapsed levels
+    too. In progress on
+    `mediums/reorder-insert-collapse-reverse-dep`, not yet merged; see
+    `CHANGELOG.md`'s `[Unreleased]` section.
 11. [ ] Tags on tasks (e.g. `PO`, `DOC`) for filtering/grouping in
     reporting contexts — the example given was tagging purchase-order
     items or deliverable documents so they can be filtered to on the

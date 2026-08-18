@@ -521,6 +521,14 @@ input.res-input{width:100%; min-width:100px; overflow:hidden; text-overflow:elli
 }
 .g-milestone.done{background:var(--accent);}
 .g-milestone.overdue{border-color:var(--danger);}
+/* A milestone belonging to a collapsed subtree, rolled up onto the collapsed summary row so it
+   (and its dependency arrows) don't just vanish when the row collapses. Same diamond, slightly
+   smaller, with a ring so it reads as "something inside here", not literally this row's own
+   milestone. See "Collapsed-row milestone rollup" in ARCHITECTURE.md. */
+.g-milestone.collapsed-hidden{
+  width:9px; height:9px;
+  box-shadow:0 0 0 2px var(--paper), 0 0 0 3px var(--line-strong);
+}
 .g-milestone-label{
   position:absolute; transform:translateY(-50%); font-size:11px; font-weight:600; color:var(--text);
   white-space:nowrap; z-index:2;
@@ -2781,6 +2789,21 @@ function renderGantt(){
   function monthCellHtml(label,w){ return `<div class="g-month-cell" style="width:${w}px;">${label}</div>`; }
 
   // ---- rows ----
+  // Collapsing a parent hides its whole subtree, milestones included — without this, a milestone
+  // inside a collapsed branch (and the dependency arrows touching it) just disappears from the
+  // chart entirely. hiddenMilestoneRow maps every such milestone's id to the collapsed ancestor
+  // row it should be rolled up onto instead, used both for rendering its marker (below) and for
+  // resolving dependency arrows (after the row loop). See "Collapsed-row milestone rollup" in
+  // ARCHITECTURE.md for why this is scoped to milestones specifically, not every hidden task.
+  const hiddenMilestoneRow = {};
+  for(const {task:t} of rows){
+    if(hasChildren(t.id) && t.collapsed){
+      for(const d of descendantIds(t.id).map(byId)){
+        if(d && isMilestone(d)) hiddenMilestoneRow[d.id] = t.id;
+      }
+    }
+  }
+
   let bodyRows = '';
   const rowY = {}; // id -> center y (relative to content top, i.e. below header)
   rows.forEach(({task:t,depth}, i)=>{
@@ -2797,6 +2820,13 @@ function renderGantt(){
             <div class="fill" style="width:${t.percentComplete}%;"></div>
             <div class="lbl">${dayWidth>=14?escapeHtml((t.resources||[]).join(', ')):''}</div>
           </div>`;
+    const collapsedMilestonesInner = (isParent && t.collapsed)
+      ? descendantIds(t.id).map(byId).filter(d=>d && isMilestone(d)).map(d=>{
+          const hx = xForISO(d.start);
+          const hOverdue = d.end && d.end<todayISO() && d.percentComplete<100;
+          return `<div class="g-milestone collapsed-hidden ${hOverdue?'overdue':''} ${d.percentComplete>=100?'done':''}" style="left:${hx+dayWidth/2}px; top:${ROW_H/2}px;" data-hidden-milestone-id="${d.id}"></div>`;
+        }).join('')
+      : '';
     bodyRows += `<div class="g-row ${isParent?'is-parent':''}" data-id="${t.id}">
         <div class="g-label" style="padding-left:${8+depth*14}px;">
           ${isParent?`<button class="twisty g-twisty" data-act="toggle" data-id="${t.id}">${t.collapsed?'▶':'▼'}</button>`:'<span class="twisty"></span>'}
@@ -2808,6 +2838,7 @@ function renderGantt(){
         </div>
         <div class="g-timeline" style="width:${timelineW}px;">
           ${timelineInner}
+          ${collapsedMilestonesInner}
         </div>
       </div>`;
   });
@@ -2853,20 +2884,38 @@ function renderGantt(){
     bindHoverTooltip(rowEl.querySelector('.g-bar') || rowEl.querySelector('.g-milestone'), ()=>html);
     bindHoverTooltip(rowEl.querySelector('.g-info-btn'), ()=>html, 150);
   });
+  // rolled-up milestone markers get their own tooltip (their own task's detail, not the
+  // collapsed row they're sitting on)
+  wrap.querySelectorAll('.g-milestone.collapsed-hidden').forEach(el=>{
+    const d = byId(el.dataset.hiddenMilestoneId);
+    if(d) bindHoverTooltip(el, ()=>buildGanttTooltipHtml(d));
+  });
 
-  // draw dependency arrows
+  // draw dependency arrows. Resolved through hiddenMilestoneRow so a milestone's arrows still
+  // draw while it (and its ancestor subtree) are hidden behind a collapsed row — X still comes
+  // from the milestone's own date (same position its rolled-up marker renders at above), only Y
+  // resolves to the collapsed row. A genuinely hidden non-milestone task resolves to null and is
+  // skipped, same as before collapsing existed — deliberately scoped to milestones, see
+  // "Collapsed-row milestone rollup" in ARCHITECTURE.md.
   const svg = document.getElementById('dep-svg');
+  function arrowEndpoint(id, isPredEnd){
+    const task = byId(id);
+    if(!task) return null;
+    const y = (id in rowY) ? rowY[id] : (hiddenMilestoneRow[id]!=null ? rowY[hiddenMilestoneRow[id]] : null);
+    if(y==null) return null;
+    const x = isPredEnd
+      ? (isMilestone(task) ? xForISO(task.end) + dayWidth/2 : xForISO(task.end) + dayWidth - 2)
+      : (isMilestone(task) ? xForISO(task.start) + dayWidth/2 : xForISO(task.start) + 2);
+    return {x, y};
+  }
   let paths = '';
-  for(const {task:t} of rows){
+  for(const t of state.tasks){
     for(const link of (t.predecessors||[])){
-      const p = byId(link.id);
-      if(!p || !(link.id in rowY) || !(t.id in rowY)) continue;
-      const x1 = isMilestone(p) ? xForISO(p.end) + dayWidth/2 : xForISO(p.end) + dayWidth - 2;
-      const y1 = rowY[p.id];
-      const x2 = isMilestone(t) ? xForISO(t.start) + dayWidth/2 : xForISO(t.start) + 2;
-      const y2 = rowY[t.id];
-      const midX = x1 + Math.max(8,(x2-x1)/2);
-      const path = `M ${x1} ${y1} L ${midX} ${y1} L ${midX} ${y2} L ${x2} ${y2}`;
+      const e1 = arrowEndpoint(link.id, true);
+      const e2 = arrowEndpoint(t.id, false);
+      if(!e1 || !e2) continue;
+      const midX = e1.x + Math.max(8,(e2.x-e1.x)/2);
+      const path = `M ${e1.x} ${e1.y} L ${midX} ${e1.y} L ${midX} ${e2.y} L ${e2.x} ${e2.y}`;
       paths += `<path d="${path}" fill="none" stroke="#8B96A5" stroke-width="1.4" marker-end="url(#arrowhead)"/>`;
     }
   }

@@ -583,6 +583,42 @@ intentionally ignore `collapsed` (see `collectAllFlattened()`, ignore-collapse-b
 or exported document should always show everything regardless of what happened to be folded away on
 screen at that moment.
 
+### Collapsed-row milestone rollup
+
+A real gap in the "children simply aren't in the list" model above: collapsing a parent hides its
+*whole* subtree, milestones included, and with them any dependency arrows touching those
+milestones — a milestone several tasks deep in a folded branch just vanished from the chart
+entirely, arrows and all, with no indication anything was there. Only relevant to
+`renderGantt()` (the interactive view); export/print never need it, since they ignore `collapsed`
+altogether per the note above.
+
+Fixed by rolling hidden milestones up onto the collapsed row they're hidden behind, scoped
+deliberately to **milestones only**, not every hidden task — a milestone gets a marker to anchor an
+arrow to, so an arrow pointing at it is legible; a hidden regular task has no marker and no
+sensible place a line could point at, so it (and its dependencies) stay invisible while collapsed,
+same as before this feature existed. Extending this to regular tasks would need summary bars to
+carry information they aren't designed to convey, not just an implementation gap.
+
+- `hiddenMilestoneRow` (built once near the top of `renderGantt()`, before the per-row loop): maps
+  every hidden milestone's id to the id of the collapsed ancestor row it should appear on. Built by
+  walking `descendantIds(t.id)` for each *visible, collapsed* row `t` — `descendantIds()` recurses
+  through every depth, so a milestone two or more collapsed levels deep still resolves to the one
+  ancestor row that's actually visible, not an intermediate collapsed one that isn't.
+- Rendering: each collapsed row's own per-row loop iteration additionally renders a
+  `.g-milestone.collapsed-hidden` marker (same diamond, smaller, with a ring — see the CSS gotcha
+  comment there) for each of its rolled-up milestones, positioned at *that milestone's own date*
+  (`xForISO(d.start)`) but the *collapsed row's* Y. Each gets its own hover tooltip
+  (`buildGanttTooltipHtml(d)` for the milestone itself, not the row it's sitting on).
+- Arrows: `arrowEndpoint(id, isPredEnd)` resolves either end of a dependency edge to `{x, y}` — `y`
+  from `rowY[id]` if visible, else `rowY[hiddenMilestoneRow[id]]` if it's a rolled-up milestone,
+  else `null` (meaning: don't draw, same as the old behavior for anything not in `rowY`). The arrow
+  loop itself iterates **every** predecessor link in `state.tasks`, not just visible rows' own
+  links like before — needed so a hidden milestone's own predecessor links, and links from other
+  tasks depending *on* a hidden milestone, both get considered, not only the visible-task-owns-the-
+  link direction the original loop covered. This is a strict superset of the old behavior (any pair
+  that resolves via `rowY` alone renders identically to before); the `null` checks are what keep it
+  from drawing anything for a genuinely hidden non-milestone task.
+
 ### Task names: editable value vs. display fallback
 
 A task's `name` can legitimately be an empty string. New tasks start that way (`addTask()`), so the

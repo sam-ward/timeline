@@ -73,12 +73,12 @@ async function main() {
     const approved = addTask(null);
     approved.name = 'Design Approved';
     approved.duration = 0; // milestone
-    approved.predecessors = [design.id];
+    approved.predecessors = [{id: design.id, lag: 0}];
 
     const build = addTask(null);
     build.name = 'Build';
     build.duration = 6;
-    build.predecessors = [approved.id];
+    build.predecessors = [{id: approved.id, lag: 0}];
     build.resources = ['Bob'];
 
     recalcAll();
@@ -93,7 +93,44 @@ async function main() {
     const milestoneCount = await page.locator('.g-milestone').count();
     check('Gantt chart renders a bar for each non-milestone task', barCount === 2);
     check('Gantt chart renders a diamond marker for the milestone', milestoneCount === 1);
+    // the {id, lag} predecessor shape actually took effect (catches the plain-id-string
+    // regression this test itself once had silently, since bar/milestone counts alone don't
+    // depend on the dependency chain having scheduled correctly)
+    const datesInOrder = await page.evaluate(() => {
+      const design = state.tasks.find(t=>t.name==='Design');
+      const approved = state.tasks.find(t=>t.name==='Design Approved');
+      const build = state.tasks.find(t=>t.name==='Build');
+      return approved.start > design.end && build.start > approved.start;
+    });
+    check('dependency chain actually scheduled (each task starts after its predecessor)', datesInOrder);
     await page.screenshot({ path: path.join(OUT_DIR, 'gantt-chart.png') });
+  }
+
+  console.log('\n--- Gantt: collapsed-row milestone rollup ---');
+  {
+    // A milestone inside a collapsed subtree should still show (rolled up onto the collapsed
+    // summary row) with its dependency arrow still drawn, not just vanish.
+    await page.evaluate(() => {
+      const phase = addTask(null); phase.name = 'Phase X';
+      const kickoff = addTask(null, phase.id); kickoff.name = 'Kickoff X'; kickoff.duration = 2;
+      const hiddenMilestone = addTask(null, phase.id); hiddenMilestone.name = 'Hidden Milestone';
+      hiddenMilestone.duration = 0;
+      hiddenMilestone.predecessors = [{id: kickoff.id, lag: 0}];
+      const external = addTask(null); external.name = 'External Follow-up';
+      external.predecessors = [{id: hiddenMilestone.id, lag: 0}];
+      recalcAll();
+      renderAll();
+      // collapse Phase X
+      phase.collapsed = true;
+      renderAll();
+    });
+    await page.waitForTimeout(300);
+    const rolledUpMarker = await page.locator('.g-milestone.collapsed-hidden').count();
+    check('the hidden milestone gets a rolled-up marker on the collapsed row', rolledUpMarker === 1);
+    const arrowCount = await page.locator('#dep-svg path').count();
+    // +1 for the <path> inside the arrowhead <marker> definition
+    check('its dependency arrow to the external task still draws', arrowCount >= 2);
+    await page.screenshot({ path: path.join(OUT_DIR, 'gantt-collapsed-milestone.png') });
   }
 
   console.log('\n--- Print rendering (the check that actually caught a real bug) ---');
