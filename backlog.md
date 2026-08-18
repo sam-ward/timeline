@@ -17,6 +17,21 @@ Changelog and remove from here once released).
    vertical-centering rule, so it just sits at its default static
    position rather than actually being centered against the `<select>`'s
    text — worth checking as the likely cause when this gets picked up).
+2. [ ] Task List UI can get noticeably laggy when typing a new task's
+   name. Not yet investigated (candidates: the per-keystroke re-render
+   path in the `#task-tbody` `input` handler, or something re-running
+   more work than it needs to on every character).
+3. [ ] No warning before an action overwrites/loses existing task data.
+   Two known triggers, raised together since they're the same underlying
+   problem: adding a sub-task to a task that already has its own
+   duration/dates/resources/etc. set silently overwrites some of that
+   (parent fields become derived rollups from children); moving a task
+   around can do the same thing by accident. Needs a look at exactly
+   what `addTask()`/indent/move do to a row's existing fields, and
+   whether a confirmation, an undo, or preventing the destructive
+   version of the action in the first place (see Improvement 0 below,
+   which would sidestep the sub-task case specifically) is the right
+   fix.
 
 The previous batches (Gantt "Today" scroll, RAG red/amber contrast, live
 status dot, arrow-key focus loss, stale selection-highlight repaint,
@@ -117,6 +132,68 @@ fixes) shipped in `v1.1.0`; see `CHANGELOG.md` for details.
      genuinely open — flagged as "not sure if it could be represented
      there" when this was raised, worth thinking through rather than
      assuming yes.
+4. [ ] The "+ Task" button should add the new task as a **sibling**
+   (same level/depth as the row it was added from), not as a sub-task.
+   Raised as a fix for accidental data loss: adding a sub-task to a row
+   silently turns that row into a parent whose fields become derived
+   rollups, overwriting whatever was there before (see Bug 3 above) —
+   defaulting "+ Task" to sibling-level sidesteps that entirely, since
+   creating a sub-task would then be a separate, deliberate action
+   rather than the default outcome of the everyday "add a task" button.
+5. [ ] A way to **insert** a new task mid-list, at a specific position,
+   rather than only ever appending at the bottom and having to move it
+   up into place afterward.
+6. [ ] Dependency picker (popover and modal): long task names get
+   truncated and there's no way to see the full name without already
+   knowing it. Either widen the picker, or have the hover tooltip show
+   the full name and/or the task's full hierarchy path (e.g.
+   "Phase 2 > Backend > API Endpoints").
+7. [ ] Reordering tasks with the up/down move buttons means chasing the
+   button with the cursor as the row moves (the button moves with its
+   row, so a rapid sequence of clicks needs the cursor to keep
+   relocating). Possible directions: arrow-key reordering with a
+   modifier key while a row is focused/selected, or a dedicated
+   "rearrange mode" that decouples clicking from the row's own
+   in-place buttons.
+8. [ ] Bulk-relocate a task and its whole subtask group at once (copy/
+   paste, cut/paste, or some other mechanism), as an alternative to
+   one-at-a-time up/down moves for restructuring a chunk of the
+   schedule. Related to Improvement 7 above (both about the general
+   "moving tasks around is currently tedious" problem) but a different
+   mechanism — worth deciding whether one supersedes the other or both
+   are worth having.
+9. [ ] No way to cancel/close the dependency popover except by moving
+   focus to another field (e.g. clicking elsewhere). Needs an explicit
+   dismiss: a close (×) button, Escape key support, or both — similar
+   to how modals already close on Escape (`teOnKeydown`), which the
+   popover doesn't currently have.
+10. [ ] Gantt: collapsing a parent row hides its children entirely,
+    including any milestones among them — so a milestone belonging to a
+    collapsed subtree, and the dependency arrows connecting it to other
+    tasks, both disappear. Needs some way to keep milestones (at least)
+    visible on the collapsed summary row, with their dependency lines
+    still drawn.
+11. [ ] Tags on tasks (e.g. `PO`, `DOC`) for filtering/grouping in
+    reporting contexts — the example given was tagging purchase-order
+    items or deliverable documents so they can be filtered to on the
+    Dashboard. Would need: a new field on the task schema, UI to
+    add/edit tags (Task List cell? edit modal?), and a filter mechanism
+    on the Dashboard alongside (or combined with) the existing resource
+    filter.
+12. [ ] **Low priority.** The Task List grid still isn't fully clean:
+    fixed row heights and column widths, with enough space and correct
+    alignment, everywhere. Overlaps with Improvement 2 above (the
+    `table-layout:fixed` design-discussion item) — likely the same
+    underlying fix, not a separate piece of work; consider folding this
+    into that item when it's picked up rather than treating them
+    independently.
+13. [ ] **Low priority.** The static HTML export doesn't scale to fill
+    the window width cleanly — looks mostly, but not quite, fixed-width.
+14. [ ] Visual indicator for the *reverse* dependency direction: a task
+    that other tasks depend on currently shows nothing to flag that;
+    only the dependent task's own Deps chip shows anything, and only
+    from that task's side. Needs a way to see, from a given task, that
+    something else relies on it finishing.
 
 ## Broader / process (tackling first)
 
