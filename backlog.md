@@ -37,9 +37,10 @@ Changelog and remove from here once released).
    `start`/`end`/`duration`/`percentComplete`/`resources` in place**,
    computed from children. If the task already had its own values set,
    they're genuinely gone, not just hidden — there's no undo. Fixed
-   with a confirmation dialog before the destructive cases (add-sub or
-   indent onto a task that already has non-default data set), naming
-   what will be lost. In progress on `fix/parent-data-loss-warning`,
+   with a confirmation dialog (`confirmParentOverwrite()`) before both
+   destructive cases, naming what will be lost; no-ops silently for a
+   task that's still on defaults (nothing at stake). Built together
+   with Improvement 4. In progress on `fix/parent-data-loss-warning`,
    not yet merged; see `CHANGELOG.md`'s `[Unreleased]` section.
 
 The previous batches (Gantt "Today" scroll, RAG red/amber contrast, live
@@ -154,13 +155,14 @@ Cheapest/safest first, biggest last.
    level/depth), not only a sub-task. The button was labeled "Add
    subtask" and did exactly that, so changing its default behavior
    would have made the label lie. Split into **two buttons** instead —
-   ➕ (sibling, same depth, bigger icon since it's the everyday action)
-   and `+` (child, current behavior, smaller icon since it's now the
-   less-common, guarded action) — so creating a sub-task is a
-   deliberate choice rather than the default outcome of the one button
-   everyone reaches for. Built together with Bug 3's warning dialog. In
-   progress on `fix/parent-data-loss-warning`, not yet merged; see
-   `CHANGELOG.md`'s `[Unreleased]` section.
+   ➕ (`add-sibling`, same depth as the clicked row, bigger icon since
+   it's the everyday action) and `+` (`add-sub`, child, current
+   behavior, smaller icon since it's now the less-common, guarded
+   action, now goes through Bug 3's warning) — so creating a sub-task
+   is a deliberate choice rather than the default outcome of the one
+   button everyone reaches for. Built together with Bug 3's warning
+   dialog. In progress on `fix/parent-data-loss-warning`, not yet
+   merged; see `CHANGELOG.md`'s `[Unreleased]` section.
 5. [ ] A way to **insert** a new task mid-list, at a specific position,
    rather than only ever appending at the bottom and having to move it
    up into place afterward.
