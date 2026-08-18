@@ -7,6 +7,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+### Fixed
+
+- Task List: typing a task's name could get noticeably laggy, worse
+  the larger the schedule. Every keystroke was fully re-rendering the
+  Gantt chart and Dashboard; both now update once typing pauses (on
+  blur), the same as every other field already worked.
+
 ## [1.1.1] - 2026-08-13
 
 ### Fixed

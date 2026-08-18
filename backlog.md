@@ -17,6 +17,31 @@ Changelog and remove from here once released).
    vertical-centering rule, so it just sits at its default static
    position rather than actually being centered against the `<select>`'s
    text — worth checking as the likely cause when this gets picked up).
+2. [x] Task List UI can get noticeably laggy when typing a new task's
+   name. Root cause confirmed: every keystroke in the name field called
+   `renderGantt()` and `renderDashboard()` in full (`#task-tbody`'s
+   `input` handler) — both rebuild their entire HTML/SVG from scratch
+   (~400 lines each), on every character. Every other field (resources,
+   dates, duration) already deferred this to blur/`change`; name was
+   the one exception. Fixed by deferring the Gantt/Dashboard re-render
+   to `change` (blur), same pattern as everything else — the data model
+   and the Task List's own dirty-dot still update live on every
+   keystroke, only the two expensive full-rebuilds are deferred. In
+   progress on `fix/name-typing-lag`, not yet merged; see
+   `CHANGELOG.md`'s `[Unreleased]` section.
+3. [ ] No warning before an action overwrites/loses existing task data.
+   **Triaged, root cause confirmed and worse than expected:** any task
+   that gains its *first* child (via the row's ➕ "Add subtask" button,
+   or via indenting a task under a previously-childless sibling)
+   instantly becomes a parent, and `recalcAll()`'s rollup pass
+   **overwrites its `start`/`end`/`duration`/`percentComplete`/
+   `resources` in place**, computed from children. If the task already
+   had its own values set, they're genuinely gone, not just hidden —
+   there's no undo. Decision: add a confirmation dialog before the
+   destructive cases (add-sub or indent onto a task that already has
+   non-default data set), naming what will be lost. Covers both
+   triggers in one fix. Build together with Improvement 4 (same code
+   area, same underlying problem).
 
 The previous batches (Gantt "Today" scroll, RAG red/amber contrast, live
 status dot, arrow-key focus loss, stale selection-highlight repaint,
@@ -28,6 +53,12 @@ in `v1.0.1`, `v1.1.0`, and `v1.1.1`; see `CHANGELOG.md` for details.
 Copy/paste discoverability, drag-and-drop open, the Dashboard Upcoming
 split, the About update badge, and dependency lag (plus its follow-up
 fixes) shipped in `v1.1.0`; see `CHANGELOG.md` for details.
+
+**Build order agreed for the current batch** (Bugs 2-3 above plus the
+Improvements below, triaged together): Bug 2 (typing lag) → Bug 3 +
+Improvement 4 (warning dialog + two buttons) → quick wins (6, 9, 12) →
+mediums (5, 7, 10, 13) → Improvement 11 (tags) last, being the largest.
+Cheapest/safest first, biggest last.
 
 1. [ ] **Needs a design discussion before any code.** Support durations
    smaller than 1 working day (e.g. half-days). Looked into the scope: the
@@ -82,7 +113,10 @@ fixes) shipped in `v1.1.0`; see `CHANGELOG.md` for details.
    but that needs auditing every column (not just these two examples)
    for what its content actually requires, and deciding how overflow
    should behave for each one (truncate? wrap? scroll?) rather than
-   just patching the two instances above.
+   just patching the two instances above. A later report ("the grid is
+   still wonky — need fixed row heights and column widths, with enough
+   space and correct alignment, everywhere") is the same underlying
+   ask; folded in here rather than tracked as a separate item.
 3. [ ] **Needs a design discussion before any code — exploratory.** Explore
    identifying the **critical path** through a schedule, both as data and
    as an optional/toggleable visual element. Not scoped yet; open
@@ -117,6 +151,67 @@ fixes) shipped in `v1.1.0`; see `CHANGELOG.md` for details.
      genuinely open — flagged as "not sure if it could be represented
      there" when this was raised, worth thinking through rather than
      assuming yes.
+4. [ ] The row's ➕ button should be able to add a **sibling** (same
+   level/depth), not only a sub-task. **Triaged:** the button is
+   currently labeled "Add subtask" and does exactly that, so just
+   changing its default behavior would make the label lie. Decision:
+   split into **two buttons** — "+ task" (sibling, same depth) and
+   "+ sub" (child, current behavior) — so creating a sub-task becomes a
+   deliberate choice rather than the default outcome of the one button
+   everyone reaches for. Build together with Bug 3's warning dialog
+   (same code area, same underlying problem).
+5. [ ] A way to **insert** a new task mid-list, at a specific position,
+   rather than only ever appending at the bottom and having to move it
+   up into place afterward.
+6. [ ] Dependency picker (popover and modal): long task names get
+   truncated and there's no way to see the full name without already
+   knowing it. Either widen the picker, or have the hover tooltip show
+   the full name and/or the task's full hierarchy path (e.g.
+   "Phase 2 > Backend > API Endpoints").
+7. [ ] Reordering tasks with the up/down move buttons means chasing the
+   button with the cursor as the row moves (the button moves with its
+   row, so a rapid sequence of clicks needs the cursor to keep
+   relocating). Possible directions: arrow-key reordering with a
+   modifier key while a row is focused/selected, or a dedicated
+   "rearrange mode" that decouples clicking from the row's own
+   in-place buttons. **Triaged:** build this one now (solves the
+   everyday single-row-nudge case well, smaller change); Improvement 8
+   stays parked rather than building both at once. Exact mechanism
+   (modifier+arrow vs. rearrange mode) still to be decided at
+   implementation time.
+8. [ ] Bulk-relocate a task and its whole subtask group at once (copy/
+   paste, cut/paste, or some other mechanism), as an alternative to
+   one-at-a-time up/down moves for restructuring a chunk of the
+   schedule. **Triaged:** parked in favor of Improvement 7 for now —
+   both solve "moving tasks around is tedious" but neither really
+   substitutes for the other (single-row nudge vs. whole-subtree
+   relocation); revisit once 7 is built and it's clearer whether the
+   rarer bulk-relocation case still needs its own mechanism.
+9. [ ] No way to cancel/close the dependency popover except by moving
+   focus to another field (e.g. clicking elsewhere). Needs an explicit
+   dismiss: a close (×) button, Escape key support, or both — similar
+   to how modals already close on Escape (`teOnKeydown`), which the
+   popover doesn't currently have.
+10. [ ] Gantt: collapsing a parent row hides its children entirely,
+    including any milestones among them — so a milestone belonging to a
+    collapsed subtree, and the dependency arrows connecting it to other
+    tasks, both disappear. Needs some way to keep milestones (at least)
+    visible on the collapsed summary row, with their dependency lines
+    still drawn.
+11. [ ] Tags on tasks (e.g. `PO`, `DOC`) for filtering/grouping in
+    reporting contexts — the example given was tagging purchase-order
+    items or deliverable documents so they can be filtered to on the
+    Dashboard. Would need: a new field on the task schema, UI to
+    add/edit tags (Task List cell? edit modal?), and a filter mechanism
+    on the Dashboard alongside (or combined with) the existing resource
+    filter.
+12. [ ] **Low priority.** The static HTML export doesn't scale to fill
+    the window width cleanly — looks mostly, but not quite, fixed-width.
+13. [ ] Visual indicator for the *reverse* dependency direction: a task
+    that other tasks depend on currently shows nothing to flag that;
+    only the dependent task's own Deps chip shows anything, and only
+    from that task's side. Needs a way to see, from a given task, that
+    something else relies on it finishing.
 
 ## Broader / process (tackling first)
 

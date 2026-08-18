@@ -2050,9 +2050,13 @@ document.getElementById('task-tbody').addEventListener('input', (e)=>{
   if(!t) return;
 
   if(field==='name'){
+    // Data model + dirty-dot stay live on every keystroke (cheap), but the Gantt/Dashboard
+    // re-render (both full HTML/SVG rebuilds, ~400 lines each) is deferred to 'change' (blur)
+    // below, the same pattern every other field already uses. Doing it here on every keystroke
+    // was the actual cause of the Task List getting laggy while typing a task name, worse as the
+    // schedule grows since there's more to rebuild each time.
     t.name = input.value;
     markDirty();
-    renderGantt(); renderDashboard(); updateTitleBar();
     return;
   }
   if(field==='percentComplete'){
@@ -2068,10 +2072,18 @@ document.getElementById('task-tbody').addEventListener('input', (e)=>{
 document.getElementById('task-tbody').addEventListener('change', (e)=>{
   const input = e.target;
   const field = input.dataset.field;
-  if(!field || field==='name') return;
+  if(!field) return;
   const tr = e.target.closest('tr');
   const t = byId(tr.dataset.id);
   if(!t) return;
+
+  if(field==='name'){
+    // The task's own row already reflects every keystroke live (it's the same input the user is
+    // typing into); Gantt bars and Dashboard cards showing this task's name are the only things
+    // that need a refresh, deferred to here — see the 'input' handler above for why.
+    renderGantt(); renderDashboard();
+    return;
+  }
 
   if(field==='resources'){
     t.resources = input.value.split(',').map(s=>s.trim()).filter(Boolean);

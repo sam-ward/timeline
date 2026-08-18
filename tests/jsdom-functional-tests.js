@@ -112,6 +112,27 @@ async function main() {
       doc.querySelector(`tr[data-id="${t2.id}"] [data-field="start"]`).disabled);
   }
 
+  console.log('\n--- Task List typing performance ---');
+  {
+    // Regression test for the "typing a task name gets laggy" bug: renderGantt()/renderDashboard()
+    // used to run in full on every keystroke in the name field, instead of deferring to blur like
+    // every other field already does. Verify the deferral actually happens: the Gantt label should
+    // NOT reflect a name change until the field commits ('change', i.e. blur), not on every 'input'.
+    const t1 = D.state.tasks[0]; // 'Kickoff', from the Scheduling engine block above
+    const nameInput = doc.querySelector(`tr[data-id="${t1.id}"] [data-field="name"]`);
+    const ganttLabel = () => doc.querySelector(`.g-row[data-id="${t1.id}"] .g-label`);
+
+    nameInput.value = 'Renamed mid-typing';
+    nameInput.dispatchEvent(new window.Event('input', {bubbles: true}));
+    check('data model updates live on every keystroke', t1.name === 'Renamed mid-typing');
+    check("Gantt label does NOT update yet (still shows the old name — the render is deferred)",
+      ganttLabel().textContent.includes('Kickoff') && !ganttLabel().textContent.includes('Renamed'));
+
+    nameInput.dispatchEvent(new window.Event('change', {bubbles: true}));
+    check('Gantt label updates once the field commits (blur/change)',
+      ganttLabel().textContent.includes('Renamed mid-typing'));
+  }
+
   console.log('\n--- Dependency lag ---');
   {
     const p = D.addTask(null);
