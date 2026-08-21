@@ -133,18 +133,21 @@ async function main() {
     await page.screenshot({ path: path.join(OUT_DIR, 'gantt-collapsed-milestone.png') });
   }
 
-  console.log('\n--- Task List: date field keeps focus through a rapid same-field change burst (#19) ---');
+  console.log('\n--- Task List: date field is never rebuilt mid-edit (#19) ---');
   {
-    // Reproduces the actual mechanism behind #19 ("editing a date loses focus too quickly"),
-    // not the flaky native segment-typing symptom itself: a single keystroke into a native
-    // date input's segment can fire two 'change' events back to back, with the browser
-    // blurring the field to <body> in between, before the app's own code runs at all. Each
-    // 'change' used to schedule its own independent deferred rebuild+maybe-refocus; whichever
-    // one ran last decided the outcome, and it could see the field already blurred and
-    // (correctly, by its own stale information) decline to refocus — destroying the row a
-    // second time right after the first rebuild had just fixed it. This drives that exact
-    // burst directly (real native date-input segment typing isn't reliable to simulate
-    // headlessly) and checks that only one net rebuild results, with focus correctly restored.
+    // #19 ("editing a date loses focus too quickly") turned out to have a much more specific
+    // cause than either of two earlier attempts at this fix assumed. Instrumented directly:
+    // calling .focus() on a native date input *always* resets its active segment (month/day/
+    // year) to the first one — confirmed even when reusing the exact same DOM node (never
+    // destroyed, just relocated and reattached) rather than a freshly built one. There is no
+    // way, from JS, to refocus a date input onto a specific segment. So a live rebuild-and-
+    // refocus on every 'change' (the previous approach, shared with duration/%-complete
+    // stepping) can never work correctly for typing or arrow-stepping a date's month/year
+    // segment: every commit calls .focus() again, which always snaps back to day. The fix is to
+    // not call .focus() on this field again while it's still being edited at all — i.e. not
+    // rebuild the table until the user actually leaves the field (on 'blur'), rather than on
+    // every 'change'. This checks that directly: zero rebuilds while focused, exactly one once
+    // blurred, with the right value landing in the model either way.
     await page.click('.tab-btn[data-tab="tasks"]');
     await page.waitForTimeout(200);
     const result = await page.evaluate(async () => {
@@ -155,28 +158,34 @@ async function main() {
       const origRenderAll = window.renderAll;
       window.renderAll = function(...args){ rebuildCount++; return origRenderAll.apply(this, args); };
 
-      // First 'change': still focused (matches the real first event).
+      // Simulate several native 'change' events firing while still focused — exactly what
+      // typing across multiple segments, or repeated arrow-key stepping, does in a real browser.
       input.value = '2026-09-01';
       input.dispatchEvent(new Event('change', { bubbles: true }));
-      // Between the two native events, the browser itself blurs the field to <body> — reproduced
-      // directly here rather than relying on headless Chromium's flaky native segment-typing.
-      document.body.focus();
-      // Second 'change' on the same (still-original, not-yet-rebuilt) input, immediately after.
+      input.value = '2026-09-02';
       input.dispatchEvent(new Event('change', { bubbles: true }));
+      input.value = '2026-09-03';
+      input.dispatchEvent(new Event('change', { bubbles: true }));
+      await new Promise(r => setTimeout(r, 20));
+      const rebuildsWhileFocused = rebuildCount;
+      const modelValueWhileFocused = t.start;
 
-      await new Promise(r => setTimeout(r, 50)); // let the coalesced deferred commit settle
+      // Now actually leave the field, the way tabbing away or clicking elsewhere would.
+      input.dispatchEvent(new Event('blur'));
+      await new Promise(r => setTimeout(r, 20));
       window.renderAll = origRenderAll;
 
-      const fresh = document.querySelector(`tr[data-id="${t.id}"] input[data-field="start"]`);
       return {
-        rebuildCount,
-        focusedOnDateField: document.activeElement === fresh,
-        value: fresh ? fresh.value : null,
+        rebuildsWhileFocused,
+        modelValueWhileFocused,
+        rebuildsAfterBlur: rebuildCount,
+        finalValue: t.start,
       };
     });
-    check('a same-field change burst triggers exactly one rebuild, not one per event', result.rebuildCount === 1);
-    check('focus lands back on the date field, not stranded on <body>', result.focusedOnDateField);
-    check('the committed value is the real one, not an intermediate/partial one', result.value === '2026-09-01');
+    check('no table rebuild happens while the date field is still focused', result.rebuildsWhileFocused === 0);
+    check('the model already reflects the live-typed value even before blur', result.modelValueWhileFocused === '2026-09-03');
+    check('exactly one rebuild happens once the field is actually left', result.rebuildsAfterBlur === 1);
+    check('the final committed value is correct', result.finalValue === '2026-09-03');
     // The Print test below expects the Gantt tab active (printing opens a popup only in that
     // case — see #btn-print's click handler) — restore it since this test switched to Task List.
     await page.click('.tab-btn[data-tab="gantt"]');

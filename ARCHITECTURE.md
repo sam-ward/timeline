@@ -483,77 +483,69 @@ listeners rather than fitting cleanly into either "fully live" or "fully deferre
 Checkboxes (manual-end toggle, the milestone Done checkbox) don't have this problem: there's no
 "typing" to interrupt, so they commit on `change` immediately, same as before.
 
-**Gotcha the pattern above doesn't fully cover: arrow-key stepping.** Committing on `change` avoids
-the typing/focus-stealing problem, but `change` doesn't only fire on blur. Arrow-key stepping (or
-clicking the native spinner) on a `date`/`number` input fires `change` *while the field is still
-focused*. The `#task-tbody` `change` handler's full-table rebuild (`recalcAll()` + `renderAll()`,
-deferred via `setTimeout`) destroys and replaces that still-focused input, so a second arrow press has
-nothing to land on. A real bug, fixed by capturing `document.activeElement === input` right before the
-rebuild and, only if true, refocusing the freshly-rendered replacement afterward. Critically, this must
-stay conditional: if the field had already lost focus (a real tab-away/click-elsewhere commit),
-refocusing it back would trap the user in a cell they deliberately left. If you add a new field to this
-handler that uses a `date`/`number` input, follow the same `stillFocused` capture-and-conditionally-
-refocus pattern, not just "commit on change."
-
-### Input blur repaint workaround (native browser bug, not app logic)
-
-A single document-level, capture-phase `'blur'` listener (`blur` doesn't bubble, hence capture; see
-the `INPUT BLUR REPAINT WORKAROUND` section near the top of the script) works around a real browser
-rendering bug, confirmed on both Chrome and Firefox, on both Windows and Linux: after selecting text in
-a date/text field (e.g. triple-click to select the whole value, the natural way to copy one) and then
-clicking somewhere that isn't itself a text/date field, the field's underlying DOM state is correctly
-cleared immediately (`document.activeElement` moves on, `selectionStart`/`selectionEnd` reset to
-`null`), but the browser doesn't repaint the field, so the old "selected" highlight stays visibly
-painted on screen until something else forces a repaint nearby (e.g. focusing a different field).
-Confirmed via a real headless-Chromium screenshot: DOM state clean, pixels stale.
-
-Several generic repaint nudges were tried and screenshotted before finding one that actually works.
-Toggling `opacity`, `transform`, `display`, and `disabled` all failed to clear it, which suggests the
-native control's selection highlight lives in its own paint/compositing layer that those don't
-invalidate. What does work: momentarily clearing and restoring the field's own `.value`, which forces
-the control to fully redraw its internal text representation from scratch. Programmatic `.value`
-assignment never fires `input`/`change`, so this has no effect on the app's own data flow. The listener
-is deliberately scoped to text-like inputs only. It skips checkboxes/radios (no such visual exists for
-them) and `<select>` (reassigning its value to `''` would risk a visible flash of "nothing selected"
-before being restored).
-
-If you're debugging what looks like a stale/incorrect visual on an input and the underlying state is
-already correct, this workaround (or the lack of an equivalent one on a new kind of control) is worth
-checking before assuming it's a data bug.
-
-**Gotcha the pattern above doesn't fully cover: arrow-key stepping, and a deeper one underneath it
+**Gotcha the pattern above doesn't fully cover: arrow-key stepping and date-field segment resets
 (#19).** Committing on `change` avoids the typing/focus-stealing problem, but `change` doesn't only
-fire on blur. Arrow-key stepping (or clicking the native spinner) on a `date`/`number` input fires
-`change` *while the field is still focused*. The `#task-tbody` `change` handler's full-table rebuild
-(`recalcAll()` + `renderAll()`, deferred via `setTimeout`) destroys and replaces that still-focused
-input, so a second arrow press has nothing to land on. Fixed by checking `document.activeElement`
-right before the rebuild and, only if it's still this field, refocusing the freshly-rendered
-replacement afterward. Critically, this must stay conditional: if the field had already lost focus (a
-real tab-away/click-elsewhere commit), refocusing it back would trap the user in a cell they
-deliberately left.
+fire on blur. Arrow-key stepping (or clicking the native spinner) on a `duration`/`percentComplete`
+input fires `change` *while the field is still focused*. The `#task-tbody` `change` handler's
+full-table rebuild (`recalcAll()` + `renderAll()`, deferred via `setTimeout`) destroys and replaces
+that still-focused input, so a second arrow press has nothing to land on. Fixed for those two fields
+by checking `document.activeElement` right before the rebuild and, only if it's still this field,
+refocusing the freshly-rendered replacement afterward — conditional so that a field the user had
+already deliberately left (a real tab-away/click-elsewhere commit) doesn't get yanked back into focus.
+A shared `pendingFieldCommitTimer` coalesces a same-field burst of `change` events into one net rebuild
+rather than stacking independent ones (a native date input's segment editing can fire more than one
+`change` per keystroke — see below), and the check treats `document.activeElement === document.body`
+the same as still-focused-on-this-field, to recover if the browser itself briefly blurs the field
+mid-burst. This whole live-rebuild-and-refocus pattern is still the right one for `duration`/
+`percentComplete` (plain single-buffer number inputs — refocusing just resets cursor position, a
+minor thing, not the bug below).
 
-That first fix wasn't the whole story. A single keystroke into a native date input's *segment* (month/
-day/year) can fire **two** `change` events back to back, and in between them the browser itself blurs
-the field to `<body>` — before any of the app's own code runs. Each `change` used to schedule its own
-independent deferred rebuild; since every one of them unconditionally rebuilds the table, whichever one
-runs *last* decides the outcome — and that one would see the field already blurred and (correctly, by
-its own now-stale information) decline to refocus, destroying the row a second time right after the
-first rebuild had just fixed it, leaving focus stranded on `<body>` for good. Two changes fixed this:
-a single shared `pendingFieldCommitTimer`, so a same-field burst of `change` events cancels-and-
-reschedules down to one net rebuild instead of stacking N independent destructive ones; and the
-focus check inside that deferred callback now treats `document.activeElement === document.body` the
-same as still-focused-on-this-field, recovering from the browser's own in-between blur without
-weakening the real guard (a user who deliberately moved to a *different* real field still has
-`activeElement` pointing at that element, not `body`, so this can't yank focus somewhere they didn't
-intend). If you add a new field to this handler that uses a `date`/`number` input, follow this same
-coalesced-commit, checked-fresh-not-captured-early, body-counts-as-focused pattern, not just "commit on
-change." Verified with a Playwright test that drives the exact two-`change`-events-plus-blur-in-between
-burst directly (`tests/playwright-visual-tests.js`, "date field keeps focus through a rapid same-field
-change burst") — real native date-input segment typing turned out to be too flaky to simulate reliably
-in headless Chromium in this sandbox (values jumped to implausible years, an unexplained third `blur`
-fired even after a successful refocus with no further JS-traceable cause), so the test exercises the
-code-level race directly instead of the flaky native symptom; manual verification in a real browser is
-still worth doing for a change like this one.
+**Date fields (`start`/`end`) don't use that pattern at all, for a much more fundamental reason.**
+Two rounds of trying to make live-rebuild-and-refocus work for dates (matching the pattern above)
+both failed against real user testing, because the underlying assumption doesn't hold for date
+inputs specifically: **calling `.focus()` on a native `<input type="date">` always resets its active
+internal segment (month/day/year) to the first one — full stop, no exception.** Confirmed
+experimentally by relocating the *exact same* DOM node (never destroyed, just detached and
+reattached, so nothing about its identity changed) and refocusing it: the active segment still reset
+to the first one, exactly as it would for a brand-new node. There is no JS API to refocus a date input
+onto a specific segment. So any live-rebuild-and-refocus approach — no matter how carefully the
+refocus logic itself is written — can never correctly support typing or arrow-stepping in the month or
+year segment: every commit calls `.focus()` again, which unconditionally snaps back to the first
+segment, which is exactly what #19 reported ("in the month or year field ... after 1 keypress the
+focus jumps back to the day field").
+
+The only real fix: don't call `.focus()` on the field again while it's still being edited at all —
+i.e. don't rebuild the table on every `change` for a date field, defer that entirely to the field's
+own `'blur'` (the user actually leaving it), the same commit-on-blur idea `name` already uses, just via
+a real `blur` listener instead of `change` since a date field's `change` fires mid-edit rather than
+only on blur. `change` for `start`/`end` now only ever does `t.start = input.value` (or `t.end = ...`)
++ `markDirty()` — no rebuild, no `.focus()` call, nothing to disturb the field's internal state while
+the user is still working in it. A separate capture-phase `'blur'` listener on `#task-tbody` (`blur`
+doesn't bubble, same idiom as the repaint workaround below) does the actual `recalcAll()` +
+`renderAll()` once the field is genuinely left; no refocus needed there since focus has, by definition,
+already moved on by the time `blur` fires. This does mean a date field's own row doesn't show live
+Gantt/rollup feedback while it's still focused, the way `duration`/`percentComplete` stepping does —
+a deliberate tradeoff, since a `.focus()`-based live-update approach is structurally incapable of
+working correctly for date segments regardless of how it's implemented.
+
+That blur listener needed a reentrancy guard (`handlingDateFieldBlur`) for a subtler reason:
+`renderTaskTable()`'s `tbody.innerHTML=''` removes every input in the table, including whatever the
+user just tabbed *to*, if that's also a start/end field in the same table (e.g. tabbing from Start
+straight to End) — the browser fires a real `blur` for that too, which the same capture-phase listener
+catches again, reentrantly, from inside the very `renderAll()` call it's already in the middle of.
+Without the guard that's a second, wasted rebuild every time, and worse: the reentrant call's own
+`renderAll()` then destroys the very field the user just tabbed to, and since this path deliberately
+doesn't refocus anything, that Tab could land the user on nothing instead of the field they tabbed to.
+
+Verified with a Playwright test (`tests/playwright-visual-tests.js`, "date field is never rebuilt
+mid-edit") that checks the actual code-level guarantee directly — zero rebuilds while focused, exactly
+one once blurred, correct final value — rather than simulating real native segment typing. Real native
+date-input segment typing turned out to be too flaky to simulate reliably in headless Chromium in this
+sandbox across two earlier attempts at reproducing this bug (values jumped to implausible years, an
+unexplained extra `blur` fired with no further JS-traceable cause), which is also why the first two
+attempted fixes both passed their own headless verification and both turned out to be wrong once
+actually tested in a real browser — a reminder that this specific interaction needs real-browser
+confirmation, not just headless test-suite green, before considering it actually fixed.
 
 ### Input blur repaint workaround (native browser bug, not app logic)
 
