@@ -18,7 +18,8 @@ Any change you make must preserve it.
 - Read `ARCHITECTURE.md` in full before editing `timeline-schedule-tool.html`. It documents real,
   non-obvious gotchas (print/sticky-positioning, CSS specificity, focus-stealing re-renders,
   circular-dependency scheduling) that are easy to reintroduce if you don't know they happened.
-- Check `backlog.md` for what's already known/pending before assuming something is new.
+- Check GitHub Issues (`gh issue list`) for what's already known/pending before assuming something
+  is new.
 
 ## Working discipline (non-negotiable)
 
@@ -39,21 +40,24 @@ Any change you make must preserve it.
      stale it stops being useful. See the pointer in `ARCHITECTURE.md`'s "Common tasks for future
      changes".
    - `CHANGELOG.md`'s `[Unreleased]` section for anything user-visible.
-   - `backlog.md`, update status as you go rather than letting it drift from reality.
+   - The GitHub issue(s) the change addresses: close it (`gh issue close`, or `Closes #N` in the PR
+     description so the merge does it automatically), or comment with a status update if it's not
+     fully resolved yet. Don't let an issue sit open after the fix has actually shipped.
 
    **Before running `git commit`, answer this explicitly, not just hold it as intent:** does this
-   change need a `CHANGELOG.md` entry, and does a `backlog.md` item need its checkbox flipped or
-   its status updated? If yes to either, they go in *this* commit. A commit message, however
-   detailed, is not a substitute for either file. A commit message lives in git history, which
-   nobody reads to find out what shipped or what's still open; `CHANGELOG.md` and `backlog.md` are
-   what a reader actually checks, and they only work if they're current. When working through a
-   list of several changes in one session, this check applies to *every single one of them
-   individually*, not once at the end of the list. This was written after a real miss: five
-   sequential bug-fix commits in one session, each thoroughly tested and thoroughly described in
-   its own commit message, and only the fifth one touched `backlog.md` (incidentally, not because
-   the rule was followed) and none of the five touched `CHANGELOG.md` until a sixth, separate
-   corrective commit was needed. The instruction existed the whole time; it just wasn't applied
-   under the momentum of moving through a list.
+   change need a `CHANGELOG.md` entry, and does it close or update a GitHub issue? If yes to
+   either, don't let it slip to "later" — a commit message, however detailed, is not a substitute
+   for either. A commit message lives in git history, which nobody reads to find out what shipped
+   or what's still open; `CHANGELOG.md` and the issue tracker are what a reader actually checks,
+   and they only work if they're current. When working through a list of several changes in one
+   session, this check applies to *every single one of them individually*, not once at the end of
+   the list. This was written after a real miss (back when `backlog.md` was the tracker, before
+   the move to GitHub Issues): five sequential bug-fix commits in one session, each thoroughly
+   tested and thoroughly described in its own commit message, and only the fifth one touched the
+   tracker (incidentally, not because the rule was followed) and none of the five touched
+   `CHANGELOG.md` until a sixth, separate corrective commit was needed. The instruction existed
+   the whole time; it just wasn't applied under the momentum of moving through a list. The same
+   discipline applies now, just against issues instead of a file.
 4. **If a reported bug doesn't reproduce** after a genuine attempt, say so plainly: "I can't
    reproduce this, here's what I tried," rather than guessing at a change and calling it fixed.
 
@@ -63,8 +67,9 @@ Any change you make must preserve it.
   `main`. See `CONTRIBUTING.md`.
 - Releases are cut by tagging `main` (`vX.Y.Z`, semantic versioning), which triggers
   `.github/workflows/release.yml`. Full steps in `CONTRIBUTING.md`.
-- `backlog.md` is the live source of truth for pending bugs/improvements/infra work. Keep it
-  current rather than letting state live only in chat.
+- GitHub Issues (labeled `bug` / `enhancement`) is the live source of truth for pending
+  bugs/improvements/infra work — not a markdown file. File a new issue for anything raised that
+  doesn't already have one, rather than letting state live only in chat.
 
 ## Things that need explicit sign-off, every time
 
@@ -89,7 +94,8 @@ standing permission.
 - `ARCHITECTURE.md`: how the code works; read before touching `timeline-schedule-tool.html`.
 - `CONTRIBUTING.md`: branching and release process.
 - `CHANGELOG.md`: what shipped, per release.
-- `backlog.md`: what's pending.
+- GitHub Issues: what's pending (`bug` / `enhancement` labels; `needs-design` marks items parked
+  on an open design question). `backlog.md` no longer exists — it was migrated to Issues.
 - `examples/verification-schedule.json` (+ `examples/README.md`): manual verification fixture;
   keep it current.
 - `tests/`: dev-only jsdom + Playwright harnesses; see `tests/README.md`.
