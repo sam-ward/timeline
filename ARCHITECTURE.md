@@ -521,17 +521,39 @@ If you're debugging what looks like a stale/incorrect visual on an input and the
 already correct, this workaround (or the lack of an equivalent one on a new kind of control) is worth
 checking before assuming it's a data bug.
 
-**Gotcha the pattern above doesn't fully cover: arrow-key stepping.** Committing on `change` avoids
-the typing/focus-stealing problem, but `change` doesn't only fire on blur. Arrow-key stepping (or
-clicking the native spinner) on a `date`/`number` input fires `change` *while the field is still
-focused*. The `#task-tbody` `change` handler's full-table rebuild (`recalcAll()` + `renderAll()`,
-deferred via `setTimeout`) destroys and replaces that still-focused input, so a second arrow press has
-nothing to land on. A real bug, fixed by capturing `document.activeElement === input` right before the
-rebuild and, only if true, refocusing the freshly-rendered replacement afterward. Critically, this must
-stay conditional: if the field had already lost focus (a real tab-away/click-elsewhere commit),
-refocusing it back would trap the user in a cell they deliberately left. If you add a new field to this
-handler that uses a `date`/`number` input, follow the same `stillFocused` capture-and-conditionally-
-refocus pattern, not just "commit on change."
+**Gotcha the pattern above doesn't fully cover: arrow-key stepping, and a deeper one underneath it
+(#19).** Committing on `change` avoids the typing/focus-stealing problem, but `change` doesn't only
+fire on blur. Arrow-key stepping (or clicking the native spinner) on a `date`/`number` input fires
+`change` *while the field is still focused*. The `#task-tbody` `change` handler's full-table rebuild
+(`recalcAll()` + `renderAll()`, deferred via `setTimeout`) destroys and replaces that still-focused
+input, so a second arrow press has nothing to land on. Fixed by checking `document.activeElement`
+right before the rebuild and, only if it's still this field, refocusing the freshly-rendered
+replacement afterward. Critically, this must stay conditional: if the field had already lost focus (a
+real tab-away/click-elsewhere commit), refocusing it back would trap the user in a cell they
+deliberately left.
+
+That first fix wasn't the whole story. A single keystroke into a native date input's *segment* (month/
+day/year) can fire **two** `change` events back to back, and in between them the browser itself blurs
+the field to `<body>` — before any of the app's own code runs. Each `change` used to schedule its own
+independent deferred rebuild; since every one of them unconditionally rebuilds the table, whichever one
+runs *last* decides the outcome — and that one would see the field already blurred and (correctly, by
+its own now-stale information) decline to refocus, destroying the row a second time right after the
+first rebuild had just fixed it, leaving focus stranded on `<body>` for good. Two changes fixed this:
+a single shared `pendingFieldCommitTimer`, so a same-field burst of `change` events cancels-and-
+reschedules down to one net rebuild instead of stacking N independent destructive ones; and the
+focus check inside that deferred callback now treats `document.activeElement === document.body` the
+same as still-focused-on-this-field, recovering from the browser's own in-between blur without
+weakening the real guard (a user who deliberately moved to a *different* real field still has
+`activeElement` pointing at that element, not `body`, so this can't yank focus somewhere they didn't
+intend). If you add a new field to this handler that uses a `date`/`number` input, follow this same
+coalesced-commit, checked-fresh-not-captured-early, body-counts-as-focused pattern, not just "commit on
+change." Verified with a Playwright test that drives the exact two-`change`-events-plus-blur-in-between
+burst directly (`tests/playwright-visual-tests.js`, "date field keeps focus through a rapid same-field
+change burst") — real native date-input segment typing turned out to be too flaky to simulate reliably
+in headless Chromium in this sandbox (values jumped to implausible years, an unexplained third `blur`
+fired even after a successful refocus with no further JS-traceable cause), so the test exercises the
+code-level race directly instead of the flaky native symptom; manual verification in a real browser is
+still worth doing for a change like this one.
 
 ### Input blur repaint workaround (native browser bug, not app logic)
 

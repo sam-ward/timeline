@@ -2095,6 +2095,10 @@ document.getElementById('task-tbody').addEventListener('click', (e)=>{
 });
 
 let copiedDateValue = null;
+// Shared across every Task List field's 'change' handler below — see the long comment where it's
+// used (start/end/duration/percentComplete commit) for why a single field's rapid-fire 'change'
+// events need to be coalesced into one pending rebuild rather than each scheduling its own (#19).
+let pendingFieldCommitTimer = null;
 document.getElementById('task-tbody').addEventListener('keydown', (e)=>{
   const isDateInput = e.target.matches && e.target.matches('input[type="date"]');
   if(!isDateInput) return;
@@ -2219,11 +2223,28 @@ document.getElementById('task-tbody').addEventListener('change', (e)=>{
   // tabbing/clicking away, on the other hand, has already moved focus elsewhere by this point.
   // Only refocus in the former case: doing it unconditionally would trap someone who deliberately
   // moved on to the next field right back in the cell they just left.
-  const stillFocused = document.activeElement === input;
+  //
+  // A single keystroke inside a native date input's segment can fire *two* 'change' events back
+  // to back (#19), with the browser itself blurring the field to <body> in between, before our
+  // code runs at all. Each 'change' used to schedule its own independent deferred rebuild+maybe-
+  // refocus; since every one of them unconditionally rebuilds the table (recalcAll+renderAll),
+  // whichever one runs *last* wins, and that one saw the field already blurred and (correctly, by
+  // its own now-stale information) declined to refocus — destroying the row a second time, right
+  // after the first rebuild had just fixed it, and leaving focus stranded on <body> for good.
+  // Coalescing to a single pending commit — cancelling any rebuild still queued from an earlier
+  // 'change' on this same field before scheduling a new one — collapses a same-field burst like
+  // this into one net rebuild, decided by the freshest information.
   const taskId = t.id, fieldName = field;
-
-  markDirty();
-  setTimeout(()=>{
+  if(pendingFieldCommitTimer) clearTimeout(pendingFieldCommitTimer);
+  pendingFieldCommitTimer = setTimeout(()=>{
+    pendingFieldCommitTimer = null;
+    // Checked fresh here, not captured synchronously above at 'change' time, since the field may
+    // already have been blurred to <body> by the browser itself by the time this runs (see above).
+    // Treating "focus already fell through to <body>" the same as "still focused here" recovers
+    // from that without weakening the real guard: a user who deliberately tabbed/clicked to a
+    // different field has activeElement pointing at that other element, not body, so this still
+    // won't yank focus away from something they intentionally moved to.
+    const stillFocused = document.activeElement === input || document.activeElement === document.body;
     recalcAll();
     renderAll();
     if(stillFocused){
@@ -2231,6 +2252,7 @@ document.getElementById('task-tbody').addEventListener('change', (e)=>{
       if(fresh) fresh.focus();
     }
   }, 0);
+  markDirty();
 });
 
 document.getElementById('btn-add-task').addEventListener('click', ()=>addTask(null));

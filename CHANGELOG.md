@@ -7,6 +7,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+### Fixed
+
+- Task List: editing a date field could lose focus after a single
+  keypress, especially typing into one segment (month/day/year) of an
+  already-filled-in date. A single keystroke there can fire two
+  `change` events in a row, with the browser blurring the field to
+  `<body>` in between; each `change` used to trigger its own
+  independent table rebuild, and the second one would see the field
+  already blurred and decline to restore focus, undoing what the first
+  one had just fixed. (#19)
+
 ## [1.2.0] - 2026-08-18
 
 ### Added

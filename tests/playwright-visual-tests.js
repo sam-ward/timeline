@@ -133,6 +133,56 @@ async function main() {
     await page.screenshot({ path: path.join(OUT_DIR, 'gantt-collapsed-milestone.png') });
   }
 
+  console.log('\n--- Task List: date field keeps focus through a rapid same-field change burst (#19) ---');
+  {
+    // Reproduces the actual mechanism behind #19 ("editing a date loses focus too quickly"),
+    // not the flaky native segment-typing symptom itself: a single keystroke into a native
+    // date input's segment can fire two 'change' events back to back, with the browser
+    // blurring the field to <body> in between, before the app's own code runs at all. Each
+    // 'change' used to schedule its own independent deferred rebuild+maybe-refocus; whichever
+    // one ran last decided the outcome, and it could see the field already blurred and
+    // (correctly, by its own stale information) decline to refocus — destroying the row a
+    // second time right after the first rebuild had just fixed it. This drives that exact
+    // burst directly (real native date-input segment typing isn't reliable to simulate
+    // headlessly) and checks that only one net rebuild results, with focus correctly restored.
+    await page.click('.tab-btn[data-tab="tasks"]');
+    await page.waitForTimeout(200);
+    const result = await page.evaluate(async () => {
+      const t = state.tasks[0];
+      const input = document.querySelector(`tr[data-id="${t.id}"] input[data-field="start"]`);
+      input.focus();
+      let rebuildCount = 0;
+      const origRenderAll = window.renderAll;
+      window.renderAll = function(...args){ rebuildCount++; return origRenderAll.apply(this, args); };
+
+      // First 'change': still focused (matches the real first event).
+      input.value = '2026-09-01';
+      input.dispatchEvent(new Event('change', { bubbles: true }));
+      // Between the two native events, the browser itself blurs the field to <body> — reproduced
+      // directly here rather than relying on headless Chromium's flaky native segment-typing.
+      document.body.focus();
+      // Second 'change' on the same (still-original, not-yet-rebuilt) input, immediately after.
+      input.dispatchEvent(new Event('change', { bubbles: true }));
+
+      await new Promise(r => setTimeout(r, 50)); // let the coalesced deferred commit settle
+      window.renderAll = origRenderAll;
+
+      const fresh = document.querySelector(`tr[data-id="${t.id}"] input[data-field="start"]`);
+      return {
+        rebuildCount,
+        focusedOnDateField: document.activeElement === fresh,
+        value: fresh ? fresh.value : null,
+      };
+    });
+    check('a same-field change burst triggers exactly one rebuild, not one per event', result.rebuildCount === 1);
+    check('focus lands back on the date field, not stranded on <body>', result.focusedOnDateField);
+    check('the committed value is the real one, not an intermediate/partial one', result.value === '2026-09-01');
+    // The Print test below expects the Gantt tab active (printing opens a popup only in that
+    // case — see #btn-print's click handler) — restore it since this test switched to Task List.
+    await page.click('.tab-btn[data-tab="gantt"]');
+    await page.waitForTimeout(200);
+  }
+
   console.log('\n--- Print rendering (the check that actually caught a real bug) ---');
   {
     // Trigger the Gantt print flow the same way a user clicking "Print / PDF" would,
