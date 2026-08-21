@@ -23,7 +23,6 @@ but that's a bypass for genuine housekeeping, not a default. Use it only
 for a **standalone** change that doesn't touch app behavior or the process
 itself:
 
-- `backlog.md` housekeeping (checking off items, adding new ones, reprioritizing).
 - Fixing a typo or updating a screenshot in `README.md`.
 - Anything else purely editorial, with no code behind it.
 
