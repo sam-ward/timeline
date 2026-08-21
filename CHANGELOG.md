@@ -7,6 +7,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+### Fixed
+
+- Task List: editing a Start/End date could snap back to the day
+  segment after a single keypress or arrow-key step in the month or
+  year segment. Root cause: refocusing a native date input always
+  resets its active segment to the first one, no matter what — so any
+  approach that rebuilds the table and refocuses the field on every
+  edit was guaranteed to keep interrupting month/year edits, no matter
+  how that refocus itself was implemented. Date fields no longer
+  rebuild the table while still focused at all; the schedule now
+  recalculates once the field is actually left instead. (#19)
+
 ## [1.2.0] - 2026-08-18
 
 ### Added

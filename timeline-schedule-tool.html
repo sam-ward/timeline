@@ -2095,6 +2095,10 @@ document.getElementById('task-tbody').addEventListener('click', (e)=>{
 });
 
 let copiedDateValue = null;
+// Shared across every Task List field's 'change' handler below — see the long comment where it's
+// used (start/end/duration/percentComplete commit) for why a single field's rapid-fire 'change'
+// events need to be coalesced into one pending rebuild rather than each scheduling its own (#19).
+let pendingFieldCommitTimer = null;
 document.getElementById('task-tbody').addEventListener('keydown', (e)=>{
   const isDateInput = e.target.matches && e.target.matches('input[type="date"]');
   if(!isDateInput) return;
@@ -2206,24 +2210,42 @@ document.getElementById('task-tbody').addEventListener('change', (e)=>{
     return;
   }
 
-  if(field==='start') t.start = input.value;
-  else if(field==='end') t.end = input.value;
-  else if(field==='duration') t.duration = sanitizeDuration(input.value);
+  if(field==='start' || field==='end'){
+    // Deliberately NOT the live rebuild-and-refocus path below (#19, second round). A native date
+    // input's internal per-segment (month/day/year) editing state turns out to be reset by
+    // *any* .focus() call, full stop — confirmed experimentally: even relocating and reattaching
+    // the exact same DOM node (never destroyed) and refocusing it still snapped the active segment
+    // back to the first one, same as a genuinely new node would. There is no way, from JS, to
+    // refocus a date input onto a specific segment — so a live rebuild-and-refocus on every
+    // 'change' can never work correctly for typing or arrow-stepping in the month/year segment: it
+    // would always snap back to day after one keystroke, regardless of how the refocus itself is
+    // implemented. The only real fix is to not call .focus() on this field again while it's still
+    // being edited — i.e. not rebuild the table at all until the user actually leaves the field.
+    // Commit the model immediately (so nothing is lost if the tab is closed mid-edit) but leave the
+    // expensive recalcAll()+renderAll() to the 'blur' listener below, same tradeoff already made
+    // for the name field, just via blur instead of change since date 'change' fires mid-edit.
+    if(field==='start') t.start = input.value; else t.end = input.value;
+    markDirty();
+    return;
+  }
+
+  if(field==='duration') t.duration = sanitizeDuration(input.value);
   else if(field==='percentComplete') t.percentComplete = Math.min(100,Math.max(0,Number(input.value)||0));
   else if(field==='milestoneDone') t.percentComplete = input.checked ? 100 : 0;
   else if(field==='manualEnd') t.manualEnd = input.checked;
   else return;
 
-  // Arrow-key stepping (or clicking the native spinner) on a date/number field fires 'change'
-  // without blurring — the field is still focused when we get here. A real edit committed by
-  // tabbing/clicking away, on the other hand, has already moved focus elsewhere by this point.
+  // Arrow-key stepping (or clicking the native spinner) on a duration/%-complete field fires
+  // 'change' without blurring — the field is still focused when we get here. A real edit committed
+  // by tabbing/clicking away, on the other hand, has already moved focus elsewhere by this point.
   // Only refocus in the former case: doing it unconditionally would trap someone who deliberately
-  // moved on to the next field right back in the cell they just left.
-  const stillFocused = document.activeElement === input;
+  // moved on to the next field right back in the cell they just left. (Date fields don't go through
+  // this path at all — see above.)
   const taskId = t.id, fieldName = field;
-
-  markDirty();
-  setTimeout(()=>{
+  if(pendingFieldCommitTimer) clearTimeout(pendingFieldCommitTimer);
+  pendingFieldCommitTimer = setTimeout(()=>{
+    pendingFieldCommitTimer = null;
+    const stillFocused = document.activeElement === input || document.activeElement === document.body;
     recalcAll();
     renderAll();
     if(stillFocused){
@@ -2231,7 +2253,39 @@ document.getElementById('task-tbody').addEventListener('change', (e)=>{
       if(fresh) fresh.focus();
     }
   }, 0);
+  markDirty();
 });
+
+// Date fields (start/end) commit their value immediately on 'change' (see above) but defer the
+// expensive recalcAll()+renderAll() to here, once the user has actually left the field — 'blur'
+// doesn't bubble, hence the capture-phase listener on the ancestor (same idiom as the "INPUT BLUR
+// REPAINT WORKAROUND" listener elsewhere in this file). No refocus needed: by the time 'blur'
+// fires, focus has genuinely moved on (or the tab/window lost focus entirely), so there's nothing
+// to restore it to — unlike the live-rebuild path above, which has to guess whether refocusing is
+// wanted at all.
+//
+// Reentrancy guard: renderTaskTable()'s `tbody.innerHTML=''` below removes every input in the
+// table, including whatever the user just tabbed *to* if that's also a start/end field in the
+// same table (e.g. tabbing from Start straight to End) — the browser fires a real 'blur' for
+// that too, at which point it's still `document.activeElement` and gets caught by this same
+// capture-phase listener again, reentrantly, from inside the very renderAll() call this triggered.
+// Without the guard that's a second, wasted rebuild every time, and — worse — since the reentrant
+// call's own renderAll() then wipes out the very field the user just tabbed to (which nothing
+// refocuses, this path deliberately doesn't refocus anything), that Tab could land the user
+// nowhere instead of on the field they tabbed to.
+let handlingDateFieldBlur = false;
+document.getElementById('task-tbody').addEventListener('blur', (e)=>{
+  const input = e.target;
+  if(!input.matches || !input.matches('input[data-field="start"], input[data-field="end"]')) return;
+  if(handlingDateFieldBlur) return;
+  handlingDateFieldBlur = true;
+  try{
+    recalcAll();
+    renderAll();
+  } finally {
+    handlingDateFieldBlur = false;
+  }
+}, true);
 
 document.getElementById('btn-add-task').addEventListener('click', ()=>addTask(null));
 
