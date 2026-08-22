@@ -51,19 +51,19 @@ and read the descriptions in the edit modal / hover tooltips as you go.
 
 ## Keeping it current
 
-Dates are anchored close to when this fixture was last refreshed (currently
-late August 2026), so today's date lands roughly a third of the way through
-the schedule and the Dashboard buckets land in sensible places (some overdue,
-some in progress, some upcoming). They'll drift over time — eventually
-everything will read as "overdue," and the Gantt's Today marker will end up
-off toward the far end of the chart instead of with useful context on both
-sides. If that's happened, shift every task's `start`/`end` and every
-`holidays` entry forward by the same number of days (a small script that
-does this by editing only those date-shaped strings, not a full JSON
-parse/stringify round-trip — that reformats every array onto multiple
-lines and turns a one-line diff into a noisy one) so today lands around the
-first third of the range again, and bump `meta.created`/`meta.modified` to
-reflect the refresh.
+Dates are anchored so today's date lands roughly a third of the way through
+the schedule, keeping the Dashboard buckets in sensible places (some overdue,
+some in progress, some upcoming) and giving the Gantt's Today marker useful
+context on both sides instead of drifting toward — or past — the end of the
+chart as real time passes.
+
+This is handled automatically now: `tests/refresh-verification-fixture-dates.js`
+shifts every date in the *current* file by a fixed offset (not a from-scratch
+regeneration, so real edits made while testing a feature are preserved) if
+today has drifted too far from that ~third-of-the-way mark, and runs via a
+pre-commit hook if you've enabled it (`git config core.hooksPath .githooks`,
+see `CONTRIBUTING.md`). Run it by hand anytime with
+`node tests/refresh-verification-fixture-dates.js`.
 
 If you add or change a feature, update this fixture (and this README) in
 the same pass; see the reminder in `ARCHITECTURE.md`.

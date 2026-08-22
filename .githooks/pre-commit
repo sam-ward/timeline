@@ -1,0 +1,18 @@
+#!/usr/bin/env sh
+# Keeps examples/verification-schedule.json's dates fresh automatically, as part of every commit.
+# See tests/refresh-verification-fixture-dates.js for what "fresh" means and why it works this way
+# (shifts the *current* file's dates rather than regenerating it, so real edits made while testing
+# a feature are never thrown away).
+#
+# Enable once per clone: git config core.hooksPath .githooks
+#
+# Never blocks the commit — if Node isn't available, or the script errors, this just gets out of the
+# way silently rather than failing an unrelated commit over fixture housekeeping.
+
+if command -v node >/dev/null 2>&1; then
+  node "$(git rev-parse --show-toplevel)/tests/refresh-verification-fixture-dates.js" 2>/dev/null
+  # Fold the update into whatever's already being committed, if the script changed anything.
+  git add "$(git rev-parse --show-toplevel)/examples/verification-schedule.json" 2>/dev/null
+fi
+
+exit 0
