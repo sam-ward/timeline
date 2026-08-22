@@ -43,6 +43,11 @@ and read the descriptions in the edit modal / hover tooltips as you go.
 - **Edge cases**: a blank task name (checks the `displayName()` fallback to
   "Untitled task" in read-only views vs. the placeholder in editable
   fields) and a deliberately long task name (checks wrapping/truncation).
+- **Tags**: `PO` and `DOC` both used on more than one task, across every task
+  type — a parent (`ph1`, `DOC`), a milestone (`ph1-design`, `PO`; `ph3-launch`,
+  `DOC`), and a regular leaf task (`misc-longname`, `PO`) — and deliberately
+  *not* matching between `ph1` and its child `ph1-design`, to demonstrate tags
+  don't roll up to parents the way resources do.
 
 ## Keeping it current
 

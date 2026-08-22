@@ -140,6 +140,73 @@ also removes it from its flex container's `align-items:center`. Missing that rul
 off-center (#21) — worth remembering if this ever needs touching again, since the visual error is
 small enough to miss at a glance but confirms cleanly via `getBoundingClientRect()`.
 
+### Tags
+
+`t.tags` is a plain `string[]`, freeform labels for filtering/reporting (e.g. `PO`, `DOC`) with no
+separate tag registry — same "spelling is identity" precedent as `resources`, right down to reusing
+its exact canonicalization approach: `canonicalizeTagCasing()` is `canonicalizeResourceCasing()`'s
+sibling, run defensively at the start of every `recalcAll()`, so a case variant either typed or
+loaded from disk (`"PO"` vs `"po"`) collapses to one spelling instead of silently forking the
+vocabulary. `allTags()` (mirrors `allResources()`) is the vocabulary offered everywhere tags are
+picked from.
+
+Two deliberate differences from `resources`, both from the same reasoning — there's no computed/
+derived value to protect the way there is for a parent's dates/resources, so nothing needs
+locking:
+
+- **No rollup to parent tasks.** A parent's own `tags` (if set) are untouched by its children's tags,
+  unlike `resources`/dates/`percentComplete`, which are recomputed from children on every recalc.
+- **Works identically on every task type** — leaf, parent, and milestone — with no `rollupLocked`/
+  `isMilestone(t)` gating anywhere, the same reasoning already applied to `status` above.
+
+**UI: a Deps-style popover, not a Resources-style text field — deliberately.** Tags are expected to
+be used occasionally for a small recurring vocabulary, not typed fresh per task the way resource
+names often are, so the Task List's `.tag-chip` button (styled/behaving exactly like `.dep-chip` —
+including reserving a fixed `min-width` for the same `table-layout:auto` reflow-avoidance reason, see
+the Deps chip gotcha) opens a checkbox popover (`openTagsPopover()`) listing every tag in
+`allTags()`, rather than a free-text comma-separated input. A checkbox list naturally surfaces what's
+already in use, so people converge on shared tags instead of near-duplicate free text. The popover
+and the edit modal share one rendering function, `renderTagPickerInto(container, holder, onChange)`
+— `holder` is anything with a `.tags` array, which is what makes sharing possible despite the two
+call sites having different commit timing:
+
+- **Task List popover**: `holder` is the real task `t`, and `onChange` commits live (`markDirty()` +
+  `recalcAll()` + `renderAll()` + reopening the popover with fresh state), the same pattern as the
+  Deps popover.
+- **Edit modal**: `holder` is a throwaway `{tags: [...]}` copy (`pendingTags`), matching the modal's
+  "commit only on Save" model used for every other field there (see `pendingDeps` for the same
+  pattern applied to dependencies) — `t.tags` is only actually written on Save, and `pendingTags.tags`
+  feeds into `teSnapshot()` so Cancel's unsaved-changes prompt sees tag edits too. **Gotcha if you
+  touch this again:** `renderTagPickerInto()` replaces its *entire* target's `innerHTML`, so the
+  popover passes it a nested `.tag-picker-body` div rather than the `.popover` element itself — doing
+  the latter silently wipes out the `.popover-head` (title + close button) sitting next to it. This
+  was a real bug caught by a Playwright test, not by inspection.
+
+Adding a brand-new tag not yet in `allTags()` goes through `addTagToTask(holder, rawTag)`, shared by
+both the "add" button/Enter-to-add in the picker widget. It trims, no-ops on empty input or a tag
+already on that task, and canonicalizes against `allTags()` case-insensitively before adding — so a
+new tag typed as a case variant of an existing one is redirected to the existing spelling immediately,
+rather than relying on the next `recalcAll()` pass to clean it up after the fact.
+
+**Elsewhere a tagged task shows up, deliberately kept lightweight in different ways per surface:**
+
+- **Gantt label row** (`.g-tag-mark`, both `renderGantt()` and the static/export
+  `buildGanttTimelineHtml()`): a small 🏷 marker, presence-only — no count, no tag names in the
+  label itself (those are in the `title` attribute and the full hover tooltip). Matches
+  `.milestone-mark`'s treatment: a small always-there-or-not glyph next to the name, not a chip.
+- **Gantt hover tooltip** (`buildGanttTooltipHtml()`): a full "Tags" row, same style as "Resources"
+  right above it, only rendered when the task actually has tags (no "none" placeholder the way
+  Resources shows "unassigned" — tags having none is the common case, not worth calling out).
+- **Dashboard item** (`taskItemHtml()`): tags append to the same `.t-meta` line resources are
+  already on (`date · resources · 🏷 tags`), rather than a separate line — keeps every dashboard
+  card's item the same height whether or not it happens to have tags.
+
+**Dashboard: `#dash-clear-filters-btn`.** With two independent filters (resource, tag) that combine
+as AND, it's easy to leave one active and forget it's still narrowing things after moving on — a
+plain reset button next to them, shown only when `dashResourceFilter.length || dashTagFilter.length`
+(computed in `renderDashboard()`, same place both filter buttons' labels already get refreshed), so
+its own visibility doubles as the "something's filtered" indicator rather than needing a separate one.
+
 ### Milestones: a convention, not a separate type
 
 A task **is** a milestone if `duration === 0`. There's no `isMilestoneFlag` boolean field; this was a

@@ -16,6 +16,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 - `FILE_FORMAT.md`: a full field-by-field reference for the saved
   schedule JSON format, for anyone building a tool or AI agent that
   reads or writes schedule files directly. (#20)
+- Tags: freeform labels (e.g. `PO`, `DOC`) for filtering/reporting.
+  Add them from a new "Tags" chip in the Task List (a checkbox popover
+  listing every tag in use, plus a field to add a new one — the same
+  style as the Deps picker, not a free-text field, so a small
+  vocabulary stays consistent instead of forking into near-duplicates)
+  or from the task edit modal. Filter the Dashboard by tag the same
+  way you already can by resource, combining with the resource filter
+  to narrow further. Unlike resources, tags don't roll up to parent
+  tasks and work the same on every task type, including parents and
+  milestones. A tagged task also shows a small 🏷 marker on its Gantt
+  row, the full tag list in the Gantt hover tooltip, and its tags
+  alongside its resources on Dashboard cards. With two independent
+  filters now, a "Clear filters" button appears next to them whenever
+  either is active, resetting both at once. (#26)
 
 ### Fixed
 

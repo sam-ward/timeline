@@ -43,7 +43,8 @@ that's the authoritative source if this document and the code ever disagree.
   "status": "amber",
   "predecessors": [{ "id": "t1a2b3c4", "lag": 1 }],
   "parentId": null,
-  "collapsed": false
+  "collapsed": false,
+  "tags": ["PO"]
 }
 ```
 
@@ -63,6 +64,7 @@ that's the authoritative source if this document and the code ever disagree.
 | `predecessors` | `{id: string, lag: number}[]` | Dependencies. `id` must match another task's `id` in the same file. `lag` is signed working days the successor waits after the predecessor's `end` before it's eligible to start (negative = lead time, the successor can start *before* the predecessor fully finishes). **Legacy shape still accepted on load**: an array of plain id strings (`["t1a2b3c4"]`, no lag) from before this field existed — each is upgraded to `{id, lag: 0}`, reproducing the old "start the next working day" behavior exactly. New files should always use the object form. A task that's its own ancestor's dependent (a cycle) isn't rejected by the loader itself — the app's dependency picker prevents creating one interactively, but a hand-authored file with a cycle in it isn't validated against that. |
 | `parentId` | string \| null | The containing task's `id`, or `null` for a top-level task. Defines the hierarchy — there's no separate tree/nesting structure in the file, it's flat with parent pointers. |
 | `collapsed` | boolean | Whether this task's children are hidden in the Task List and Gantt views. Only meaningful if the task actually has children (i.e. is some other task's `parentId`); harmless but meaningless otherwise. Defaults to `false`. |
+| `tags` | string[] | Freeform labels for filtering/reporting (e.g. `"PO"`, `"DOC"`), no separate tag registry — same "spelling is identity" precedent as `resources`, matched case-insensitively on load and whenever a new one is typed in the app (so `"PO"` and `"po"` collapse to one tag rather than forking). **Unlike `resources`, does not roll up to parent tasks** and works identically on every task type (leaf, parent, milestone) — there's no computed/derived value being protected the way there is for a parent's dates/resources, so nothing about a task's `tags` is ever overwritten by `recalcAll()` beyond that case-canonicalization pass. Defaults to `[]`. |
 
 ### The milestone convention
 
@@ -82,6 +84,8 @@ directly editable through the normal UI fields:
   start/end span, and isn't read from the file for scheduling purposes either.
 - `resources` = the union of its children's `resources` (deduplicated).
 - `percentComplete` = a weighted average across its children's own `duration` and completion.
+- `tags` is the one field that's **not** rolled up or otherwise touched by this — a parent's own
+  `tags` (if any) stay exactly as set, independent of whatever its children are tagged with.
 
 All of the above happens in `recalcAll()`, on every load and on every edit. If you hand-author a
 parent task with different values already in the file, expect them to be silently replaced the
@@ -117,7 +121,8 @@ A minimal but complete two-task schedule with one dependency:
       "status": "green",
       "predecessors": [],
       "parentId": null,
-      "collapsed": false
+      "collapsed": false,
+      "tags": ["DOC"]
     },
     {
       "id": "build",
@@ -133,7 +138,8 @@ A minimal but complete two-task schedule with one dependency:
       "status": null,
       "predecessors": [{ "id": "design", "lag": 0 }],
       "parentId": null,
-      "collapsed": false
+      "collapsed": false,
+      "tags": ["PO"]
     }
   ]
 }
