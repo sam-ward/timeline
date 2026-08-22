@@ -185,8 +185,11 @@ Either way, your data never leaves your computer.
 ## Data format
 
 Schedules are saved as plain JSON: human-readable, diffable, and easy to script against if you ever
-want to. See [ARCHITECTURE.md](ARCHITECTURE.md) for the full data model if you're building something
-on top of it.
+want to. See [FILE_FORMAT.md](FILE_FORMAT.md) for the full field-by-field reference if you're
+building or scripting something against it directly (including another tool or an AI agent reading
+or writing schedule files) — it documents every field, its type/default, and the non-obvious
+semantics (the milestone convention, how dependencies and parent rollups work, what's legacy vs.
+current shape).
 
 ## Limitations
 

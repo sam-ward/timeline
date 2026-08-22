@@ -43,7 +43,7 @@ const DEBUG_EXPORTS = [
   'addWorkingDays', 'countWorkingDays', 'hasChildren', 'childrenOf',
   'eligiblePredecessorIds', 'serialize', 'loadFromText', 'allResources',
   'classifyTask', 'stepWorkingDays', 'normalizeTask', 'taskHierarchyPath',
-  'moveTask', 'dependentsOf'
+  'moveTask', 'dependentsOf', 'setAllCollapsed'
 ];
 
 function wait(ms) { return new Promise(r => setTimeout(r, ms)); }
@@ -296,6 +296,31 @@ async function main() {
     const badgeC1 = doc.querySelector(`tr[data-id="${c1.id}"] .blocks-badge`);
     check('a task with no dependents shows an empty badge (reserved space, no content)',
       badgeC1.textContent.trim() === '');
+  }
+
+  console.log('\n--- Collapse All / Expand All ---');
+  {
+    const parent1 = D.addTask(null); parent1.name = 'Parent 1';
+    const child1 = D.addTask(null, parent1.id); child1.name = 'Child 1';
+    const parent2 = D.addTask(null); parent2.name = 'Parent 2';
+    const child2 = D.addTask(null, parent2.id); child2.name = 'Child 2';
+    const leaf = D.addTask(null); leaf.name = 'Standalone leaf'; // no children — must be untouched
+    D.recalcAll();
+    window.renderAll();
+    await wait(20);
+
+    D.setAllCollapsed(true);
+    check('collapsing all sets collapsed on every parent',
+      D.byId(parent1.id).collapsed === true && D.byId(parent2.id).collapsed === true);
+    check('a task with no children is left alone by collapse-all', D.byId(leaf.id).collapsed === false);
+    check('a collapsed parent\'s children are hidden from the Task List',
+      doc.querySelector(`tr[data-id="${child1.id}"]`) === null);
+
+    D.setAllCollapsed(false);
+    check('expanding all clears collapsed on every parent',
+      D.byId(parent1.id).collapsed === false && D.byId(parent2.id).collapsed === false);
+    check('a previously-hidden child is visible again after expand-all',
+      doc.querySelector(`tr[data-id="${child1.id}"]`) !== null);
   }
 
   console.log('\n--- Keyboard reordering (Ctrl+Shift+Up/Down) ---');

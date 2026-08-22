@@ -7,6 +7,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+### Added
+
+- Task List and Gantt Chart: "Collapse All" / "Expand All" buttons in
+  each view's toolbar, alongside the existing per-row toggle. Both
+  views share the same collapsed state, so either view's buttons
+  affect both. (#18)
+- `FILE_FORMAT.md`: a full field-by-field reference for the saved
+  schedule JSON format, for anyone building a tool or AI agent that
+  reads or writes schedule files directly. (#20)
+
 ### Fixed
 
 - Task List: editing a Start/End date could snap back to the day
