@@ -92,6 +92,9 @@ standing permission.
 
 - `README.md`: user-facing docs.
 - `ARCHITECTURE.md`: how the code works; read before touching `timeline-schedule-tool.html`.
+- `FILE_FORMAT.md`: the saved-schedule JSON format, field by field — keep in sync with
+  `normalizeTask()` and the inline schema comment near `const state` whenever a Task field is
+  added/changed/removed (see the "Adding a new field to the Task schema" checklist below).
 - `CONTRIBUTING.md`: branching and release process.
 - `CHANGELOG.md`: what shipped, per release.
 - GitHub Issues: what's pending (`bug` / `enhancement` labels; `needs-design` marks items parked

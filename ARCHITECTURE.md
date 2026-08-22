@@ -849,6 +849,9 @@ the fixture should demonstrate it too, so it doesn't quietly go stale as a verif
    print-column-hiding rule) the `nth-child` selectors in the `@media print` block. They hide the
    reorder-controls, Notes, and Actions columns *by position*, so inserting a new Task List column
    shifts those indices and needs updating too (this bit the Status column when it was added).
+7. Update `FILE_FORMAT.md` and the inline schema comment near `const state`, both of which list every
+   Task field by hand — neither updates itself, and both had already drifted out of sync with the
+   real fields (missing `status`/`collapsed`) before `FILE_FORMAT.md` existed specifically to fix that.
 
 The Status field (`status` / `sanitizeStatus()` / `statusDotHtml()`, documented above) went through
 exactly this checklist and is a reasonable template to copy if you're adding something similar: a

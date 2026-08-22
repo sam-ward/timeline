@@ -639,6 +639,8 @@ input.res-input{width:100%; min-width:100px; overflow:hidden; text-overflow:elli
     <section id="view-tasks" class="view">
       <div class="toolbar">
         <button class="sm-btn" id="btn-add-task">+ Task</button>
+        <button class="sm-btn" id="btn-collapse-all" title="Collapse every task with subtasks">Collapse All</button>
+        <button class="sm-btn" id="btn-expand-all" title="Expand every collapsed task">Expand All</button>
         <span class="spacer"></span>
         <span class="hint">Tip: tasks with predecessors auto-schedule their start date.</span>
       </div>
@@ -673,6 +675,8 @@ input.res-input{width:100%; min-width:100px; overflow:hidden; text-overflow:elli
           <button id="zoom-in">+</button>
         </div>
         <button class="sm-btn" id="btn-today">Today</button>
+        <button class="sm-btn" id="btn-collapse-all-gantt" title="Collapse every task with subtasks">Collapse All</button>
+        <button class="sm-btn" id="btn-expand-all-gantt" title="Expand every collapsed task">Expand All</button>
         <div class="legend">
           <span><i class="sw" style="background:var(--accent);"></i>Progress</span>
           <span><i class="sw" style="background:var(--weekend-bg);"></i>Weekend</span>
@@ -718,7 +722,11 @@ const state = {
   holidays: [],   // array of ISO date strings "YYYY-MM-DD"
   tasks: []       // see schema below
 };
-/* Task schema:
+/* Task schema — see FILE_FORMAT.md at the repo root for the full field-by-field reference (types,
+   defaults, semantics like the duration===0 milestone convention and manualEnd). Keep this comment
+   in sync with normalizeTask() below whenever a field is added/removed; it drifted out of sync with
+   `status` and `collapsed` before FILE_FORMAT.md existed, which is exactly what that file is meant
+   to prevent going forward:
 {
   id, name, description, notes,
   resources: [string],
@@ -727,8 +735,10 @@ const state = {
   end: "YYYY-MM-DD",
   manualEnd: bool,       // if true, end is user-controlled and duration is derived
   percentComplete: 0-100,
+  status: "green" | "amber" | "red" | null,
   predecessors: [{id: taskId, lag: number}],  // lag: working days after predecessor's end (may be negative)
-  parentId: taskId|null
+  parentId: taskId|null,
+  collapsed: bool        // children hidden in Task List / Gantt; meaningless if the task has no children
 }
 */
 let fileHandle = null;     // File System Access API handle, if supported & used
@@ -2288,6 +2298,22 @@ document.getElementById('task-tbody').addEventListener('blur', (e)=>{
 }, true);
 
 document.getElementById('btn-add-task').addEventListener('click', ()=>addTask(null));
+
+/** Sets `collapsed` on every task that has children (regardless of depth or current state) and
+ *  re-renders. `collapsed` is a single field shared by both the Task List (`flattenVisible()`) and
+ *  the Gantt (`renderGantt()`), so one function here covers both views — hence the button pair
+ *  appearing in both toolbars below rather than needing separate per-view logic. */
+function setAllCollapsed(collapsed){
+  let changed = false;
+  for(const t of state.tasks){
+    if(hasChildren(t.id) && t.collapsed !== collapsed){ t.collapsed = collapsed; changed = true; }
+  }
+  if(changed) renderAll();
+}
+document.getElementById('btn-collapse-all').addEventListener('click', ()=>setAllCollapsed(true));
+document.getElementById('btn-expand-all').addEventListener('click', ()=>setAllCollapsed(false));
+document.getElementById('btn-collapse-all-gantt').addEventListener('click', ()=>setAllCollapsed(true));
+document.getElementById('btn-expand-all-gantt').addEventListener('click', ()=>setAllCollapsed(false));
 
 /* =========================================================================
    POPOVER: dependencies
