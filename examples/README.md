@@ -51,12 +51,19 @@ and read the descriptions in the edit modal / hover tooltips as you go.
 
 ## Keeping it current
 
-Dates are anchored close to when this fixture was last written (mid-August
-2026) so the Dashboard buckets land in sensible places. They'll drift over
-time. Eventually everything will read as "overdue." If that happens, either
-regenerate the dates (shift every task's date fields forward by the same
-offset) or check the fixture's `meta.created` date against today and treat
-bucket placement loosely if it's been more than a few months.
+Dates are anchored close to when this fixture was last refreshed (currently
+late August 2026), so today's date lands roughly a third of the way through
+the schedule and the Dashboard buckets land in sensible places (some overdue,
+some in progress, some upcoming). They'll drift over time — eventually
+everything will read as "overdue," and the Gantt's Today marker will end up
+off toward the far end of the chart instead of with useful context on both
+sides. If that's happened, shift every task's `start`/`end` and every
+`holidays` entry forward by the same number of days (a small script that
+does this by editing only those date-shaped strings, not a full JSON
+parse/stringify round-trip — that reformats every array onto multiple
+lines and turns a one-line diff into a noisy one) so today lands around the
+first third of the range again, and bump `meta.created`/`meta.modified` to
+reflect the refresh.
 
 If you add or change a feature, update this fixture (and this README) in
 the same pass; see the reminder in `ARCHITECTURE.md`.
