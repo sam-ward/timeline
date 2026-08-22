@@ -671,6 +671,78 @@ intentionally ignore `collapsed` (see `collectAllFlattened()`, ignore-collapse-b
 or exported document should always show everything regardless of what happened to be folded away on
 screen at that moment.
 
+### Sticky Task column: row-divider bleed-through (#33)
+
+Reported (with a real screenshot, confirmed on both Chrome and Firefox, at 100% display scaling —
+not fractional-DPI-specific): weekend/weekday shading and the vertical segments of dependency arrows
+visibly showing through a small gap between each row's Task label, worse while actively scrolling
+but present at rest too.
+
+**Mechanism.** `.g-label` (the per-row Task name cell, `position:sticky; left:0;`) stays pinned at
+the viewport's left edge while `#gantt-scroll` scrolls horizontally. The weekend/holiday shading
+(`.g-bg-cell`) and the dependency-arrow overlay (`#dep-svg`) are **not** sticky — they're normal
+absolutely-positioned content that scrolls away with everything else. So as soon as the user scrolls
+at all, that non-sticky content slides to wherever the sticky label currently sits, physically
+underneath it in the DOM's stacking order. `.g-row`'s divider line was a `border-bottom`, painted at
+the row's *outer* edge — and a border at an element's outer edge is exactly where compositing a
+sticky layer over independently-scrolling content underneath doesn't always paint fully opaquely,
+letting a sliver of whatever's now positioned behind that specific hairline bleed through. Two
+earlier attempts at this fix (documented in git history on this branch) both targeted the wrong
+mechanism — first the sticky column's own right edge during scroll, then a border crossing between
+two independently-positioned hairlines — before the user's screenshot and description made the real
+mechanism (this one) unambiguous.
+
+**Fix:** `.g-row`'s divider is now `box-shadow: inset 0 -1px 0 var(--line-strong)` instead of
+`border-bottom`. Same visual line, but painted entirely *within* the row's own already-opaque box
+rather than at its outer edge — there's no outer boundary left for anything positioned behind it to
+show through, regardless of what's scrolled underneath the sticky label at that moment. Applied to
+both the interactive Gantt and the static/export renderer's `.g-row` for consistency, even though the
+export renderer doesn't have a sticky column (`position:static` there) and so isn't actually
+susceptible to this specific mechanism — inset shadows over borders for hairline dividers is simply
+the more robust default regardless. The two earlier defenses (`.g-bg-cell`'s redundant `border-right`
+removed; `transform:translateZ(0)` + a capping `box-shadow` on the sticky column itself) are kept —
+neither is wrong, they just weren't sufficient on their own.
+
+**Two follow-ups after the fix above, from real testing.** First: the inset shadow rendered
+noticeably fainter than the border it replaced, worse for tracing a row across — see `.g-row`'s own
+comment in the CSS for why (`--line-strong` instead of `--line`). Second, and less obvious: the
+divider was invisible in the Task label column specifically, in both light and dark mode, even after
+the color fix. Cause: `.g-row` has no explicit `align-items`, defaulting to `stretch`, so `.g-label`
+(no height of its own) stretches to the row's full height — and since `.g-label` has its own opaque
+background, painted as a *child* (on top of the row's own box-shadow in paint order), it completely
+covers that shadow within its own bounds. `.g-label` needed its own divider. Given as a real
+`border-bottom` this time, not an inset shadow, and safely so: `.g-label` is the sticky element
+itself, entirely within its own already-isolated compositing layer, not spanning a boundary between
+sticky and non-sticky content the way `.g-row`'s original border did — the mechanism that made a
+border unsafe on `.g-row` doesn't apply to a border confined to `.g-label`'s own box. Same color as
+`.g-row`'s shadow so the two read as one continuous line from the label into the chart. Confirmed via
+screenshot: continuous divider lines, light and dark mode, at rest and mid-scroll.
+
+### Gantt cursor: only the clickable things
+
+`.g-row` doesn't set `cursor:pointer` — a hand cursor over the entire row, including empty calendar
+background with nothing to click, overstated what was actually interactive there. Double-clicking
+anywhere in the row still opens the task editor (the `#gantt-scroll` `dblclick` handler resolves the
+nearest `.g-row`, unchanged), but the *cursor* only promises that over `.g-label`, `.g-bar`, and
+`.g-milestone` specifically, each of which sets its own `cursor:pointer`. `.g-bar` previously had an
+explicit (and backwards) `cursor:default` — presumably from an earlier, different reason to
+differentiate it, long since irrelevant. `.g-info-btn` stays `cursor:default` deliberately: it's a
+hover-tooltip trigger with no click handler of its own, so a pointer cursor there would promise a
+click action that doesn't exist.
+
+### Holiday shading vs. the Today marker
+
+`--warn-light` is used *only* for the Gantt's holiday shading (`.g-day-cell.holiday`,
+`.g-bg-cell.holiday`) and its legend swatch — nothing else reads it, so it's free to tune
+independently of `--warn` itself, which the Today marker (`.today-line`, `.today-flag`) uses
+directly and is meant to be the more visually prominent of the two. At its original, more saturated
+value this wasn't true in practice: a shaded holiday column can span every row in the chart, and that
+much surface area read as more attention-grabbing overall than a single 2px line, even though the
+line's own color is more saturated per-pixel. Muted to a subtle near-neutral tint (still a hair
+warmer than `--weekend-bg`, so the two stay distinguishable) rather than changing `--warn` itself,
+which would also affect the amber RAG status color it's shared with. Confirmed via screenshot with
+both markers visible in the same view, light and dark mode.
+
 ### Collapsed-row milestone rollup
 
 A real gap in the "children simply aren't in the list" model above: collapsing a parent hides its

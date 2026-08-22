@@ -104,6 +104,47 @@ async function main() {
     });
     check('dependency chain actually scheduled (each task starts after its predecessor)', datesInOrder);
     await page.screenshot({ path: path.join(OUT_DIR, 'gantt-chart.png') });
+
+    // Only the things actually clickable (a row's Task label, a bar, a milestone) should show a
+    // pointer cursor — not the row/empty calendar background, which used to inherit pointer from
+    // .g-row despite there being nothing there to click.
+    const cursors = await page.evaluate(() => ({
+      label: getComputedStyle(document.querySelector('.g-label')).cursor,
+      bar: getComputedStyle(document.querySelector('.g-bar')).cursor,
+      milestone: getComputedStyle(document.querySelector('.g-milestone')).cursor,
+      row: getComputedStyle(document.querySelector('.g-row')).cursor,
+      timelineBg: getComputedStyle(document.querySelector('.g-timeline')).cursor,
+    }));
+    check('the Task label shows a pointer cursor', cursors.label === 'pointer');
+    check('a task bar shows a pointer cursor', cursors.bar === 'pointer');
+    check('a milestone shows a pointer cursor', cursors.milestone === 'pointer');
+    check('the row itself does not show a pointer cursor', cursors.row !== 'pointer');
+    check('empty calendar background does not show a pointer cursor', cursors.timelineBg !== 'pointer');
+  }
+
+  console.log('\n--- Gantt: holiday shading is muted, distinct from weekend shading ---');
+  {
+    await page.evaluate(() => {
+      const design = state.tasks.find(t=>t.name==='Design');
+      state.holidays.push(design.start); // guarantees at least one visible .g-bg-cell.holiday
+      recalcAll();
+      renderAll();
+    });
+    await page.waitForTimeout(200);
+    const colors = await page.evaluate(() => {
+      const holidayCell = document.querySelector('.g-bg-cell.holiday');
+      const weekendCell = document.querySelector('.g-bg-cell.weekend');
+      return {
+        holiday: holidayCell && getComputedStyle(holidayCell).backgroundColor,
+        weekend: weekendCell && getComputedStyle(weekendCell).backgroundColor,
+      };
+    });
+    // Regression guard against reverting to the original, more saturated peach (rgb(251, 231, 218))
+    // that drew more visual attention than the Today marker across a whole shaded day-column — see
+    // "Holiday shading vs. the Today marker" in ARCHITECTURE.md. Not pinning the exact new value,
+    // since it's a design tweak that may reasonably shift again; just that it's no longer that one.
+    check('holiday shading is no longer the original saturated peach', colors.holiday !== 'rgb(251, 231, 218)');
+    check('holiday shading is still visually distinct from weekend shading', colors.holiday !== colors.weekend);
   }
 
   console.log('\n--- Gantt: collapsed-row milestone rollup ---');
