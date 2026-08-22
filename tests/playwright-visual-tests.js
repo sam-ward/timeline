@@ -192,6 +192,26 @@ async function main() {
     await page.waitForTimeout(200);
   }
 
+  console.log('\n--- Task edit modal: RAG status dot vertical alignment (#21) ---');
+  {
+    // .status-select-wrap .status-dot is position:absolute with no top/vertical-centering rule,
+    // so it sat at its default static position instead of actually centered against the
+    // <select>'s text. Checks real pixel geometry, not just that the CSS rule exists.
+    await page.click('.tab-btn[data-tab="tasks"]');
+    await page.waitForTimeout(200);
+    const offset = await page.evaluate(() => {
+      openTaskEditModal(state.tasks[0].id);
+      const wrap = document.querySelector('.status-select-wrap').getBoundingClientRect();
+      const dot = document.querySelector('.status-select-wrap .status-dot').getBoundingClientRect();
+      return Math.abs((dot.top + dot.height / 2) - (wrap.top + wrap.height / 2));
+    });
+    check('the status dot is vertically centered against the select (within half a pixel)', offset < 0.5);
+    await page.keyboard.press('Escape'); // closes the modal, same as clicking Cancel
+    await page.waitForTimeout(100);
+    await page.click('.tab-btn[data-tab="gantt"]');
+    await page.waitForTimeout(200);
+  }
+
   console.log('\n--- Print rendering (the check that actually caught a real bug) ---');
   {
     // Trigger the Gantt print flow the same way a user clicking "Print / PDF" would,
