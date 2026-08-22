@@ -91,3 +91,21 @@ npx playwright install chromium   # only needed once
 node jsdom-functional-tests.js
 node playwright-visual-tests.js
 ```
+
+## Git hooks (optional, but recommended once per clone)
+
+```
+git config core.hooksPath .githooks
+```
+
+Enables `.githooks/pre-commit`, which keeps `examples/verification-schedule.json`'s dates fresh
+automatically — every commit, it checks whether "today" has drifted from a sensible spot in the
+fixture's date range and, if so, shifts every date in the file (not a from-scratch regeneration, so
+real edits made while testing a feature are preserved) and folds the update into the commit. Never
+blocks a commit; see `tests/refresh-verification-fixture-dates.js` for the actual logic, and the
+"Keeping it current" section of `examples/README.md` for why this exists.
+
+Git hooks aren't version-controlled by default (`.git/hooks/` isn't part of the repo), which is why
+this needs the one-time `core.hooksPath` config rather than just working out of the box — `.githooks/`
+being a real, tracked directory is what makes it possible to check the hook itself into the repo at
+all.

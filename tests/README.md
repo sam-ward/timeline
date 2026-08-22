@@ -75,3 +75,13 @@ you'd want to inspect.
 For the Playwright harness, you don't need this trick as often: `page.evaluate()` runs directly in the
 page's own context, so it can call the app's global functions (`addTask`, `recalcAll`, etc.) exactly as
 if it were code pasted into the browser console.
+
+## A third script: keeping the verification fixture's dates fresh
+
+`refresh-verification-fixture-dates.js` isn't a test — it keeps `examples/verification-schedule.json`
+(the manual-verification fixture, see `examples/README.md`) positioned sensibly relative to today,
+shifting every date in the *current* file by a fixed offset rather than regenerating it from scratch,
+so real edits made while testing a feature are never thrown away. Runs automatically via the
+pre-commit hook if you've enabled it (see `CONTRIBUTING.md`'s "Git hooks" section); run it by hand
+anytime with `node tests/refresh-verification-fixture-dates.js`, or `--check` to see whether it would
+change anything without writing.
