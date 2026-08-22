@@ -14,7 +14,12 @@
   --accent-dark:#234F42;
   --accent-light:#E4EFEC;
   --warn:#C7622A;
-  --warn-light:#FBE7DA;
+  /* Used only for the Gantt's holiday shading (.g-day-cell.holiday, .g-bg-cell.holiday) and its
+     legend swatch — not shared with anything else, so free to tune independently of --warn itself.
+     Muted deliberately: at its original, more saturated peach it drew more visual attention across
+     a whole shaded day-column (potentially many rows tall) than the 2px Today marker does, which
+     uses --warn directly and is meant to be the more prominent of the two. */
+  --warn-light:#F3ECE4;
   --line:#DDE1E6;
   --line-strong:#C6CBD2;
   --text:#23272E;
@@ -51,7 +56,7 @@
     --accent-dark:#6FC0A3;
     --accent-light:#1F3630;
     --warn:#E08A4F;
-    --warn-light:#3A2A1C;
+    --warn-light:#2A2620;
     --line:#2C333C;
     --line-strong:#3D4650;
     --text:#E4E7EB;
@@ -79,7 +84,7 @@
   --accent-dark:#6FC0A3;
   --accent-light:#1F3630;
   --warn:#E08A4F;
-  --warn-light:#3A2A1C;
+  --warn-light:#2A2620;
   --line:#2C333C;
   --line-strong:#3D4650;
   --text:#E4E7EB;
@@ -467,13 +472,61 @@ input.res-input{width:100%; min-width:100px; overflow:hidden; text-overflow:elli
 .legend .sw{display:inline-block; width:10px; height:10px; border-radius:2px; margin-right:4px; vertical-align:-1px;}
 #gantt-scroll{flex:1; min-height:0; overflow:auto; position:relative; background:var(--paper);}
 #gantt-content{position:relative;}
-.g-row{display:flex; height:var(--row-h); border-bottom:1px solid var(--line); cursor:pointer;}
+/* #33: box-shadow:inset, not border-bottom. The weekend/holiday shading and the dependency-arrow
+   SVG are NOT sticky — they scroll normally with the rest of the timeline — while .g-label (this
+   row's own Task-name cell) IS sticky, pinned at the left edge. Scrolling slides that non-sticky
+   content underneath wherever the sticky label currently sits. A `border` is painted at the
+   element's outer edge, where compositing a sticky layer over scrolled content underneath doesn't
+   always paint that hairline fully opaquely — letting a sliver of whatever's now positioned behind
+   it (a weekend bar, an arrow's vertical segment) bleed through right at the row divider. An inset
+   shadow paints the same line, but entirely within the row's own already-opaque box, so there's no
+   outer edge for anything behind it to show through. Confirmed by a real screenshot + description,
+   not guessed at.
+
+   Uses --line-strong, not the plain --line used for most hairlines elsewhere: an inset shadow
+   renders visibly softer than a solid border at the same nominal color, and --line alone read as
+   too faint once switched from border to shadow — worse for tracing a row across, the exact thing
+   this line exists to help with. --line-strong is already used for other dividers that need to
+   stay legible (e.g. table borders); same reasoning applies here.
+
+   This alone isn't enough to make the divider visible in the Task label column specifically,
+   though: .g-row has no explicit `align-items`, so it defaults to `stretch`, meaning .g-label (no
+   height of its own) stretches to the row's full height — and since .g-label has its own opaque
+   background, painted as a child (i.e. on top of the row's own box-shadow in paint order), it
+   completely covers this shadow within its own bounds. The label needs its own visible divider;
+   see .g-label's own border-bottom below. */
+/* No cursor:pointer here — double-clicking anywhere in the row still opens the task editor (see
+   the #gantt-scroll dblclick handler, which resolves the nearest .g-row), but showing a hand cursor
+   across the whole row, including empty calendar background with nothing to click, overstated what
+   the pointer was hovering. Only .g-label, .g-bar, and .g-milestone set their own cursor:pointer —
+   the things actually meant to read as clickable. */
+.g-row{display:flex; height:var(--row-h); box-shadow:inset 0 -1px 0 var(--line-strong); cursor:default;}
 .g-label{
   position:sticky; left:0; z-index:3; width:260px; flex:none; background:var(--paper);
   display:flex; align-items:center; gap:5px; padding:0 8px; border-right:1px solid var(--line-strong);
+  cursor:pointer;
+  /* This element's own opaque background covers .g-row's box-shadow divider above within its own
+     bounds (see that rule's comment) — needs its own divider, drawn as a real border rather than an
+     inset shadow because it's safe to here: .g-label is the sticky element itself, entirely within
+     its own already-isolated compositing layer (transform:translateZ(0) below), not spanning a
+     boundary between sticky and non-sticky content the way .g-row's border used to. Same color as
+     .g-row's shadow so the line reads as continuous from the label into the timeline. */
+  border-bottom:1px solid var(--line-strong);
   font-size:12px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;
+  /* #33: scrolling the Gantt horizontally can leave a hairline of the scrolled timeline content
+     (weekend/holiday shading, bar fills) visible right at this sticky column's edge — a sub-pixel
+     rounding mismatch between how the browser positions a `position:sticky` element and how it
+     paints/clips the scrolling content underneath, not a missing background (this element already
+     has one). Two defenses, since it's not confirmed which actually matters here (couldn't
+     reproduce it visually in headless testing across several zoom levels/scroll offsets to isolate
+     it further): `translateZ(0)` forces this element onto its own compositing layer with pixel-
+     snapped boundaries instead of sharing a layer with the scrolling content, and the box-shadow
+     "caps" the boundary with 2px of the same background color regardless of the exact cause, so
+     even a genuine sub-pixel gap has nothing but more of the same color to reveal. Both are inert
+     when nothing's actually leaking through.  */
+  transform:translateZ(0); box-shadow:2px 0 0 var(--paper);
 }
-.g-row.is-parent .g-label{font-weight:700; background:var(--summary-bg);}
+.g-row.is-parent .g-label{font-weight:700; background:var(--summary-bg); box-shadow:2px 0 0 var(--summary-bg);}
 .g-row.is-parent{background:var(--summary-bg);}
 .g-label .pct-tag{margin-left:auto; font-family:var(--font-mono); font-size:10.5px; color:var(--text-mute); flex:none;}
 .g-name-txt{overflow:hidden; text-overflow:ellipsis; white-space:nowrap; min-width:0;}
@@ -483,9 +536,9 @@ input.res-input{width:100%; min-width:100px; overflow:hidden; text-overflow:elli
 }
 .g-row:hover .g-info-btn{opacity:1;}
 .g-info-btn:hover{color:var(--accent);}
-.g-bar{cursor:default;}
+.g-bar{cursor:pointer;}
 .g-head{display:flex; position:sticky; top:0; z-index:6; background:var(--header-bg); border-bottom:1px solid var(--line-strong);}
-.g-head .g-label{position:sticky; top:0; left:0; z-index:7; background:var(--header-bg); font-size:11px; text-transform:uppercase; letter-spacing:.4px; color:var(--text-mute); font-weight:700;}
+.g-head .g-label{position:sticky; top:0; left:0; z-index:7; background:var(--header-bg); font-size:11px; text-transform:uppercase; letter-spacing:.4px; color:var(--text-mute); font-weight:700; transform:translateZ(0); box-shadow:2px 0 0 var(--header-bg);}
 .g-head-days{position:relative;}
 .g-month-row{display:flex; height:20px; border-bottom:1px solid var(--line);}
 .g-month-cell{
@@ -500,7 +553,13 @@ input.res-input{width:100%; min-width:100px; overflow:hidden; text-overflow:elli
 .g-day-cell.weekend{background:var(--weekend-bg);}
 .g-day-cell.holiday{background:var(--warn-light); color:var(--warn);}
 .g-timeline{position:relative; flex:none;}
-.g-bg-cell{position:absolute; top:0; bottom:0; border-right:1px solid var(--line);}
+/* No border-right here (deliberately — see #33 in ARCHITECTURE.md): this element spans the full
+   content height in one absolutely-positioned block (top:0; bottom:0), completely independent of
+   each .g-row's own per-row border-bottom. Two independently-positioned hairlines crossing at every
+   row boundary, at certain zoom/DPI combinations, is what produced stray single-pixel artifacts
+   right on the row divider lines. The shading color itself already marks the weekend/holiday
+   boundary; the extra border line wasn't pulling its weight. */
+.g-bg-cell{position:absolute; top:0; bottom:0;}
 .g-bg-cell.weekend{background:var(--weekend-bg);}
 .g-bg-cell.holiday{background:var(--warn-light);}
 .g-bar{
@@ -518,6 +577,7 @@ input.res-input{width:100%; min-width:100px; overflow:hidden; text-overflow:elli
 .g-milestone{
   position:absolute; width:13px; height:13px; transform:translate(-50%,-50%) rotate(45deg);
   background:var(--paper); border:2px solid var(--accent); border-radius:2px; box-shadow:0 1px 2px rgba(0,0,0,.1);
+  cursor:pointer;
 }
 .g-milestone.done{background:var(--accent);}
 .g-milestone.overdue{border-color:var(--danger);}
@@ -1206,7 +1266,7 @@ function printGanttChart(){
   // that print engines are well known to handle inconsistently across browsers.
   const printCss = `
     :root{
-      --paper:#FFFFFF; --accent:#2F6F5E; --warn:#C7622A; --warn-light:#FBE7DA;
+      --paper:#FFFFFF; --accent:#2F6F5E; --warn:#C7622A; --warn-light:#F3ECE4;
       --line:#DDE1E6; --line-strong:#C6CBD2; --text:#23272E; --text-mute:#6B7280;
       --header-bg:#F6F7F8; --summary-bg:#F3F5F6; --weekend-bg:#EFF1F3;
       --bar-bg:#CFE0DB; --bar-border:#AFC7BF; --bar-label-color:#173028; --bar-label-shadow:rgba(255,255,255,.4);
@@ -1219,10 +1279,11 @@ function printGanttChart(){
     body{padding:18px; background:#fff; font-family:var(--font-ui); color:var(--text);}
     .print-header{margin-bottom:14px; font-family:var(--font-mono); font-size:14px; color:var(--text);}
     .print-header b{font-size:16px;}
-    .g-row{display:flex; border-bottom:1px solid var(--line); position:static;}
+    .g-row{display:flex; box-shadow:inset 0 -1px 0 var(--line-strong); position:static;}
     .g-row.is-parent{background:var(--summary-bg);}
     .g-label{position:static; flex:none; background:#fff; display:flex; align-items:center; gap:5px; padding:0 8px;
-      border-right:1px solid var(--line-strong); font-size:12px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;}
+      border-right:1px solid var(--line-strong); border-bottom:1px solid var(--line-strong);
+      font-size:12px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;}
     .g-row.is-parent .g-label{font-weight:700; background:var(--summary-bg);}
     .g-label .pct-tag{margin-left:auto; font-family:var(--font-mono); font-size:10.5px; color:var(--text-mute); flex:none;}
     .g-name-txt{overflow:hidden; text-overflow:ellipsis; white-space:nowrap; min-width:0;}
@@ -1238,7 +1299,8 @@ function printGanttChart(){
     .g-day-cell.weekend{background:var(--weekend-bg);}
     .g-day-cell.holiday{background:var(--warn-light); color:var(--warn);}
     .g-timeline{position:relative; flex:none;}
-    .g-bg-cell{position:absolute; top:0; bottom:0; border-right:1px solid var(--line);}
+    /* No border-right — see #33 in ARCHITECTURE.md (same reasoning as the interactive Gantt's rule). */
+    .g-bg-cell{position:absolute; top:0; bottom:0;}
     .g-bg-cell.weekend{background:var(--weekend-bg);}
     .g-bg-cell.holiday{background:var(--warn-light);}
     .g-bar{position:absolute; border-radius:4px; background:var(--bar-bg); border:1px solid var(--bar-border); overflow:hidden;}

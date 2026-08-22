@@ -31,6 +31,31 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 - Task edit modal: the RAG status color dot wasn't vertically centered
   against the status text next to it — off by about 5.5px, since it
   was absolutely positioned with no vertical-centering rule. (#21)
+- Gantt: weekend/weekday shading and dependency-arrow lines could
+  show through a small gap between each row's Task label — worse
+  while scrolling, present at rest too, on both Chrome and Firefox.
+  Root cause, confirmed from a real screenshot and description: the
+  Task label column is sticky and stays put while scrolling, but the
+  shading and arrows underneath it are not sticky and scroll normally
+  — so they end up positioned behind the label, and the row divider
+  line (previously a `border-bottom`, painted at the row's outer
+  edge) didn't always paint fully opaquely over whatever was now
+  behind it there. Redrawn as an inset shadow instead, painted fully
+  within each row's own opaque box, closing the gap regardless of
+  what's scrolled underneath. That inset line initially rendered
+  noticeably fainter than the border it replaced, and didn't show up
+  at all in the Task label column specifically (the label's own
+  background covers it there) — switched to a stronger color for the
+  row's line and gave the label column its own matching divider, so
+  it's easy to trace a row across from the label into the chart. (#33)
+- Gantt: the mouse cursor showed a hand (implying something clickable)
+  over an entire row, including empty calendar background with
+  nothing to click. Now only shows a pointer over the things that
+  actually are clickable: a row's Task label, and each bar/milestone.
+- Gantt: holiday shading was more visually prominent than the Today
+  marker, across a whole shaded day-column spanning every row — more
+  attention-grabbing than the thing meant to be the strongest visual
+  anchor. Muted to a subtle neutral tint; Today is unchanged.
 
 ## [1.2.0] - 2026-08-18
 
