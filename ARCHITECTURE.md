@@ -133,6 +133,13 @@ Status is deliberately **not** locked for parent/summary tasks or for milestones
 other field, a manager might reasonably want to flag a whole phase, or a milestone itself, as at-risk,
 so `rollupLocked` and `isMilestone(t)` are never checked before reading/writing `t.status`.
 
+The overlaid dot (`.status-select-wrap .status-dot`) is `position:absolute` so it can sit on top of
+the closed `<select>` without affecting layout — but that means it needs its own explicit vertical
+centering (`top:50%; transform:translateY(-50%)`), since removing an element from flow via `absolute`
+also removes it from its flex container's `align-items:center`. Missing that rule left it about 5.5px
+off-center (#21) — worth remembering if this ever needs touching again, since the visual error is
+small enough to miss at a glance but confirms cleanly via `getBoundingClientRect()`.
+
 ### Milestones: a convention, not a separate type
 
 A task **is** a milestone if `duration === 0`. There's no `isMilestoneFlag` boolean field; this was a

@@ -28,6 +28,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
   how that refocus itself was implemented. Date fields no longer
   rebuild the table while still focused at all; the schedule now
   recalculates once the field is actually left instead. (#19)
+- Task edit modal: the RAG status color dot wasn't vertically centered
+  against the status text next to it — off by about 5.5px, since it
+  was absolutely positioned with no vertical-centering rule. (#21)
 
 ## [1.2.0] - 2026-08-18
 
