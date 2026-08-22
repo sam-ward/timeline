@@ -25,7 +25,8 @@
       "status": "green",
       "predecessors": [],
       "parentId": null,
-      "collapsed": false
+      "collapsed": false,
+      "tags": ["DOC"]
     },
     {
       "id": "ph1-kickoff",
@@ -62,7 +63,7 @@
     {
       "id": "ph1-design",
       "name": "Design Sign-off",
-      "description": "Completed milestone gating the start of Phase 2 — demonstrates a leaf task in another branch (ph2-be-api) depending on a whole parent branch (ph1) finishing, not just this single milestone.",
+      "description": "Completed milestone gating the start of Phase 2 — demonstrates a leaf task in another branch (ph2-be-api) depending on a whole parent branch (ph1) finishing, not just this single milestone. Also demonstrates tags on a milestone, and that a task's tags are independent of its parent's — this has 'PO' while its parent ph1 has 'DOC'.",
       "notes": "",
       "resources": [],
       "duration": 0,
@@ -73,7 +74,8 @@
       "status": "green",
       "predecessors": ["ph1-req"],
       "parentId": "ph1",
-      "collapsed": false
+      "collapsed": false,
+      "tags": ["PO"]
     },
     {
       "id": "ph2",
@@ -265,7 +267,8 @@
       "status": null,
       "predecessors": ["ph3-uat"],
       "parentId": "ph3",
-      "collapsed": false
+      "collapsed": false,
+      "tags": ["DOC"]
     },
     {
       "id": "ph3-retro",
@@ -297,7 +300,8 @@
       "status": "amber",
       "predecessors": [],
       "parentId": null,
-      "collapsed": false
+      "collapsed": false,
+      "tags": ["PO"]
     },
     {
       "id": "misc-blank",

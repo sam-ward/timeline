@@ -43,7 +43,8 @@ const DEBUG_EXPORTS = [
   'addWorkingDays', 'countWorkingDays', 'hasChildren', 'childrenOf',
   'eligiblePredecessorIds', 'serialize', 'loadFromText', 'allResources',
   'classifyTask', 'stepWorkingDays', 'normalizeTask', 'taskHierarchyPath',
-  'moveTask', 'dependentsOf', 'setAllCollapsed'
+  'moveTask', 'dependentsOf', 'setAllCollapsed', 'allTags', 'addTagToTask',
+  'canonicalizeTagCasing'
 ];
 
 function wait(ms) { return new Promise(r => setTimeout(r, ms)); }
@@ -273,6 +274,55 @@ async function main() {
       a.resources[0] === b.resources[0]);
     check('allResources() reports one person, not two', D.allResources().length ===
       new Set(D.state.tasks.flatMap(t => t.resources || [])).size);
+  }
+
+  console.log('\n--- Tags (#26) ---');
+  {
+    const parent = D.addTask(null); parent.name = 'Phase (parent)';
+    const child = D.addTask(null, parent.id); child.name = 'Child of phase';
+    const leaf = D.addTask(null); leaf.name = 'Standalone leaf';
+    const milestone = D.addTask(null); milestone.name = 'A milestone'; milestone.duration = 0;
+    D.recalcAll();
+    window.renderAll();
+    await wait(20);
+
+    check('addTagToTask() adds a new tag to an empty list', D.addTagToTask(leaf, 'PO') && leaf.tags.includes('PO'));
+    check('adding the same tag twice is a no-op (returns false, no duplicate)',
+      D.addTagToTask(leaf, 'PO') === false && leaf.tags.filter(t=>t==='PO').length === 1);
+    check('an empty/whitespace-only tag is rejected', D.addTagToTask(leaf, '   ') === false);
+
+    D.addTagToTask(child, 'DOC');
+    check('tags work on a parent/summary task, unlike resources', D.addTagToTask(parent, 'PO') && parent.tags.includes('PO'));
+    check('tags work on a milestone', D.addTagToTask(milestone, 'DOC') && milestone.tags.includes('DOC'));
+    check('allTags() reports every unique tag used anywhere, sorted', JSON.stringify(D.allTags()) === JSON.stringify(['DOC','PO']));
+
+    // Case-variant tag, added via a different task — should canonicalize to the existing spelling,
+    // not fork the vocabulary, same as resource names do.
+    const other = D.addTask(null); other.name = 'Case variant tester';
+    D.addTagToTask(other, 'po'); // lowercase; 'PO' already exists
+    check('addTagToTask() canonicalizes a new tag to an existing case-insensitive match immediately',
+      other.tags[0] === 'PO');
+
+    // Simulate a hand-authored/foreign file with an inconsistent case variant already saved —
+    // canonicalizeTagCasing() (run defensively at the start of every recalcAll()) should still catch it.
+    const foreign = D.addTask(null); foreign.name = 'Foreign file task';
+    foreign.tags = ['po']; // bypasses addTagToTask() entirely, as a loaded file would
+    D.recalcAll();
+    check('canonicalizeTagCasing() fixes a case variant loaded from disk, not just typed ones',
+      foreign.tags[0] === 'PO');
+
+    check('parent tasks do NOT roll up children\'s tags (unlike resources)',
+      !parent.tags.includes('DOC')); // child has 'DOC', parent only has its own 'PO'
+
+    const untagged = D.addTask(null); untagged.name = 'Untagged task';
+    D.recalcAll();
+    window.renderAll();
+    await wait(20);
+
+    const chip = doc.querySelector(`tr[data-id="${leaf.id}"] .tag-chip`);
+    check('the Task List row shows a filled tag chip once a task has tags', chip.classList.contains('filled') && chip.textContent.trim() === '1 tag');
+    const emptyChip = doc.querySelector(`tr[data-id="${untagged.id}"] .tag-chip`);
+    check('a task with no tags shows the "+ tag" chip', emptyChip.textContent.trim() === '+ tag');
   }
 
   console.log('\n--- Reverse-dependency indicator ("Blocks") ---');

@@ -212,6 +212,78 @@ async function main() {
     await page.waitForTimeout(200);
   }
 
+  console.log('\n--- Tags: Task List popover (#26) ---');
+  {
+    await page.click('.tab-btn[data-tab="tasks"]');
+    await page.waitForTimeout(200);
+    const taskId = await page.evaluate(() => state.tasks[0].id);
+
+    await page.click(`tr[data-id="${taskId}"] [data-act="tags"]`);
+    await page.waitForTimeout(150);
+    check('the tags popover opens', await page.locator('.popover .popover-head h4').textContent() === 'Tags');
+
+    // Type a brand-new tag and press Enter, same as a user would.
+    await page.fill('.tag-add-input', 'PO');
+    await page.press('.tag-add-input', 'Enter');
+    await page.waitForTimeout(150);
+    // The popover reopens fresh after the add (same pattern as the Deps popover) — re-locate it.
+    const chipAfterAdd = await page.locator(`tr[data-id="${taskId}"] [data-act="tags"]`).textContent();
+    check('adding a new tag updates the Task List chip to show the count', chipAfterAdd.trim() === '1 tag');
+    check('the newly-added tag now appears checked in the popover', await page.locator('.popover input[type=checkbox][value="PO"]').isChecked());
+
+    // Uncheck it and confirm the chip reverts.
+    await page.click('.popover input[type=checkbox][value="PO"]');
+    await page.waitForTimeout(150);
+    const chipAfterRemove = await page.locator(`tr[data-id="${taskId}"] [data-act="tags"]`).textContent();
+    check('unchecking a tag reverts the chip to "+ tag"', chipAfterRemove.trim() === '+ tag');
+
+    await page.keyboard.press('Escape');
+    await page.waitForTimeout(100);
+  }
+
+  console.log('\n--- Tags: edit modal (commit-on-Save, unlike the popover) (#26) ---');
+  {
+    const taskId = await page.evaluate(() => state.tasks[0].id);
+    await page.evaluate((id) => openTaskEditModal(id), taskId);
+    await page.waitForTimeout(150);
+
+    await page.fill('#te-tags-wrap .tag-add-input', 'DOC');
+    await page.press('#te-tags-wrap .tag-add-input', 'Enter');
+    await page.waitForTimeout(100);
+    const modelBeforeSave = await page.evaluate((id) => byId(id).tags || [], taskId);
+    check('a tag added in the modal is NOT committed to the model until Save', modelBeforeSave.length === 0);
+
+    await page.click('#te-save');
+    await page.waitForTimeout(150);
+    const modelAfterSave = await page.evaluate((id) => byId(id).tags || [], taskId);
+    check('the tag is committed to the model after Save', modelAfterSave.includes('DOC'));
+    // The Print test below expects the Gantt tab active (printing opens a popup only in that
+    // case — see #btn-print's click handler) — restore it since this test left Task List active.
+    await page.click('.tab-btn[data-tab="gantt"]');
+    await page.waitForTimeout(200);
+  }
+
+  console.log('\n--- Tags: Gantt indicator and hover tooltip (#26) ---');
+  {
+    // "Design" already has tags from the earlier modal test above ('DOC'); "Build" has none.
+    await page.click('.tab-btn[data-tab="gantt"]');
+    await page.waitForTimeout(200);
+    const info = await page.evaluate(() => {
+      const design = state.tasks.find(t => t.name === 'Design');
+      const build = state.tasks.find(t => t.name === 'Build');
+      const row = (t) => document.querySelector(`.g-row[data-id="${t.id}"]`)
+        || Array.from(document.querySelectorAll('.g-row')).find(r => r.querySelector('.g-name-txt').textContent === t.name);
+      return {
+        designHasMark: !!row(design).querySelector('.g-tag-mark'),
+        buildHasMark: !!row(build).querySelector('.g-tag-mark'),
+        tooltipHtml: buildGanttTooltipHtml(design),
+      };
+    });
+    check('a tagged task shows the small Gantt tag indicator', info.designHasMark);
+    check('an untagged task does not show the indicator', !info.buildHasMark);
+    check('the Gantt hover tooltip includes a Tags section for a tagged task', info.tooltipHtml.includes('Tags') && info.tooltipHtml.includes('DOC'));
+  }
+
   console.log('\n--- Print rendering (the check that actually caught a real bug) ---');
   {
     // Trigger the Gantt print flow the same way a user clicking "Print / PDF" would,
@@ -249,6 +321,54 @@ async function main() {
     const cardCount = await page.locator('.dash-card').count();
     check('Dashboard renders status + per-person cards', cardCount > 0);
     await page.screenshot({ path: path.join(OUT_DIR, 'dashboard.png') });
+  }
+
+  console.log('\n--- Tags: Dashboard filter (#26) ---');
+  {
+    // The Build task from the fixture at the top of this file has no tags yet — give it one and
+    // confirm the filter actually narrows what's shown, the same mechanism as the resource filter.
+    const before = await page.evaluate(() => {
+      const build = state.tasks.find(t => t.name === 'Build');
+      build.tags = ['DOC'];
+      recalcAll();
+      renderAll();
+      return document.querySelectorAll('.dash-item').length;
+    });
+    const itemMeta = await page.evaluate(() => {
+      const build = state.tasks.find(t => t.name === 'Build');
+      const item = document.querySelector(`.dash-item[data-task-id="${build.id}"]`);
+      return item ? item.querySelector('.t-meta').textContent : null;
+    });
+    check('a Dashboard item lists its tags alongside resources, like resources are listed', itemMeta && itemMeta.includes('DOC'));
+    await page.click('#dash-tag-btn');
+    await page.waitForTimeout(150);
+    check('the tag filter popover opens', await page.locator('.popover .popover-head h4').textContent() === 'Filter by tag');
+    await page.click('.popover input[type=checkbox][value="DOC"]');
+    await page.waitForTimeout(150);
+    const afterFilter = await page.evaluate(() => document.querySelectorAll('.dash-item').length);
+    check('selecting a tag narrows the Dashboard to only matching tasks', afterFilter > 0 && afterFilter < before);
+    check('the filter button reflects the active selection', (await page.locator('#dash-tag-btn').textContent()).trim() === 'DOC');
+    check('the "Clear filters" button appears once a filter is active', await page.locator('#dash-clear-filters-btn').isVisible());
+    await page.keyboard.press('Escape');
+    await page.waitForTimeout(100);
+
+    // Also select a resource, so both filters are active at once before clearing.
+    await page.click('#dash-resource-btn');
+    await page.waitForTimeout(150);
+    await page.click('.popover input[type=checkbox]');
+    await page.waitForTimeout(150);
+    await page.keyboard.press('Escape');
+    await page.waitForTimeout(100);
+
+    await page.click('#dash-clear-filters-btn');
+    await page.waitForTimeout(150);
+    const stateAfterClear = await page.evaluate(() => ({
+      resourceBtn: document.getElementById('dash-resource-btn').textContent.trim(),
+      tagBtn: document.getElementById('dash-tag-btn').textContent.trim(),
+    }));
+    check('clearing filters resets the resource filter button', stateAfterClear.resourceBtn === 'All resources');
+    check('clearing filters resets the tag filter button', stateAfterClear.tagBtn === 'All tags');
+    check('the "Clear filters" button hides itself once nothing is filtered', !(await page.locator('#dash-clear-filters-btn').isVisible()));
   }
 
   await browser.close();

@@ -289,6 +289,10 @@ table#task-table{
 .col-name{min-width:220px;}
 .name-wrap{display:flex; align-items:center; gap:4px;}
 .milestone-mark{color:var(--accent); font-size:11px; flex:none;}
+/* Small presence-only indicator on the Gantt label row — deliberately no count/list, just a marker
+   that this task has tags at all; the hover tooltip (g-name-txt's title, or the full hover-tooltip
+   in the interactive view) is where the actual tag names show. */
+.g-tag-mark{font-size:10px; flex:none; opacity:.75;}
 /* Reverse-dependency indicator ("N tasks depend on this"). Always occupies the same reserved
    width whether or not it has content (see the Deps-chip ARCHITECTURE.md gotcha on table-layout
    reflow from content that only sometimes takes up space) — cheap insurance since .col-name is
@@ -357,6 +361,9 @@ input.res-input{width:100%; min-width:100px; overflow:hidden; text-overflow:elli
   content:'±'; position:absolute; right:5px; top:50%; transform:translateY(-50%);
   color:var(--warn); font-weight:700; font-size:11px; line-height:1;
 }
+/* Same table-layout:auto reflow gotcha as .chip-btn.dep-chip above: reserve a fixed width
+   unconditionally so switching between "+ tag" and "N tags" text never reflows the whole table. */
+.chip-btn.tag-chip{min-width:56px; box-sizing:border-box; text-align:center;}
 .lock-toggle{font-size:10px; color:var(--text-mute); display:flex; align-items:center; gap:3px; margin-top:1px;}
 .milestone-done-stack{display:flex; flex-direction:column; align-items:center; gap:2px;}
 .milestone-done-stack .stack-label{font-size:10px; color:var(--text-mute); line-height:1;}
@@ -405,6 +412,12 @@ input.res-input{width:100%; min-width:100px; overflow:hidden; text-overflow:elli
 .pop-row:hover{background:var(--accent-light);}
 .pop-row .dep-name{flex:1; min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;}
 .pop-row .dep-date{flex:none; color:var(--text-mute); font-size:10.5px; font-family:var(--font-mono); margin-left:10px;}
+.tag-add-row{display:flex; gap:6px; margin-top:8px; padding-top:8px; border-top:1px solid var(--line);}
+.tag-add-input{
+  flex:1; min-width:0; box-sizing:border-box; padding:5px 8px; border:1px solid var(--line-strong);
+  border-radius:5px; font-size:12px; background:var(--paper); color:var(--text);
+}
+.tag-add-row .tag-add-btn{flex:none;}
 .pop-empty{color:var(--text-mute); font-size:12px; padding:6px 2px;}
 /* dependency lag control (Task List popover + task edit modal "Depends on" list) */
 .dep-lag-wrap{flex:none; display:flex; align-items:center; gap:4px; margin-left:10px;}
@@ -582,10 +595,14 @@ input.res-input{width:100%; min-width:100px; overflow:hidden; text-overflow:elli
   body{background:#fff;}
   .cell-input{border:none !important; background:transparent !important;}
   *{-webkit-print-color-adjust:exact !important; print-color-adjust:exact !important; color-adjust:exact !important;}
-  /* Task List print: drop columns that are only useful for interactive editing */
+  /* Task List print: drop columns that are only useful for interactive editing. By position, not
+     selector — inserting/removing a column shifts these indices and needs updating too (bit the
+     Status column when it was added, and the Tags column when it was added: reorder-controls is 1,
+     Tags sits at 10 and *does* print (categorization is useful on a printed page, unlike Notes/
+     Actions which are purely editing aids), Notes moved from 10 to 11, Actions from 11 to 12). */
   #task-table th:nth-child(1), #task-table td:nth-child(1),
-  #task-table th:nth-child(10), #task-table td:nth-child(10),
-  #task-table th:nth-child(11), #task-table td:nth-child(11){
+  #task-table th:nth-child(11), #task-table td:nth-child(11),
+  #task-table th:nth-child(12), #task-table td:nth-child(12){
     display:none !important;
   }
   .lock-toggle{display:none !important;}
@@ -657,6 +674,7 @@ input.res-input{width:100%; min-width:100px; overflow:hidden; text-overflow:elli
               <th>% Done</th>
               <th>Resources</th>
               <th>Deps</th>
+              <th>Tags</th>
               <th>Notes</th>
               <th style="width:70px;"></th>
             </tr>
@@ -694,6 +712,9 @@ input.res-input{width:100%; min-width:100px; overflow:hidden; text-overflow:elli
       <div class="dash-toolbar">
         <label class="hint">Resources:</label>
         <button class="sm-btn" id="dash-resource-btn">All resources</button>
+        <label class="hint">Tags:</label>
+        <button class="sm-btn" id="dash-tag-btn">All tags</button>
+        <button class="sm-btn" id="dash-clear-filters-btn" style="display:none;" title="Clear both the resource and tag filters">&times; Clear filters</button>
       </div>
       <div id="dash-content"></div>
     </section>
@@ -738,7 +759,8 @@ const state = {
   status: "green" | "amber" | "red" | null,
   predecessors: [{id: taskId, lag: number}],  // lag: working days after predecessor's end (may be negative)
   parentId: taskId|null,
-  collapsed: bool        // children hidden in Task List / Gantt; meaningless if the task has no children
+  collapsed: bool,       // children hidden in Task List / Gantt; meaningless if the task has no children
+  tags: [string]         // freeform labels for filtering (e.g. "PO", "DOC"); no rollup, works on every task type
 }
 */
 let fileHandle = null;     // File System Access API handle, if supported & used
@@ -1024,7 +1046,7 @@ function buildStaticTaskListHtml(){
   if(!rows.length) return '<p class="hint">No tasks.</p>';
   const today = todayISO();
   let html = `<table id="task-table" style="width:100%;"><thead><tr>
-      <th class="col-name">Task</th><th style="width:64px;">Status</th><th>Start</th><th>End</th><th>Dur (d)</th><th>% Done</th><th>Resources</th><th>Notes</th>
+      <th class="col-name">Task</th><th style="width:64px;">Status</th><th>Start</th><th>End</th><th>Dur (d)</th><th>% Done</th><th>Resources</th><th>Tags</th><th>Notes</th>
     </tr></thead><tbody>`;
   for(const {task:t, depth} of rows){
     const isParent = hasChildren(t.id);
@@ -1038,6 +1060,7 @@ function buildStaticTaskListHtml(){
         <td style="text-align:right;">${t.duration}</td>
         <td><div class="pct-cell"><span>${t.percentComplete}%</span><span class="pct-bar"><i style="width:${t.percentComplete}%"></i></span></div></td>
         <td>${escapeHtml((t.resources||[]).join(', '))}</td>
+        <td>${escapeHtml((t.tags||[]).join(', '))}</td>
         <td>${escapeHtml(notesText)}</td>
       </tr>`;
   }
@@ -1105,6 +1128,7 @@ function buildGanttTimelineHtml(opts){
         <div class="g-label" style="padding-left:${8+depth*14}px; width:${LABEL_W_S}px;">
           ${statusDotHtml(t.status)}
           ${milestone?'<span class="milestone-mark">◆</span>':''}
+          ${(t.tags&&t.tags.length)?`<span class="g-tag-mark" title="Tagged: ${escapeAttr(t.tags.join(', '))}">🏷</span>`:''}
           <span class="g-name-txt">${escapeHtml(displayName(t))}</span>
           <span class="pct-tag">${t.percentComplete}%</span>
         </div>
@@ -1253,6 +1277,7 @@ function printGanttChart(){
     .g-milestone.overdue{border-color:var(--danger);}
     .g-milestone-label{position:absolute; transform:translateY(-50%); font-weight:600; color:var(--text); white-space:nowrap;}
     .milestone-mark{color:var(--accent); font-size:11px;}
+    .g-tag-mark{font-size:10px; opacity:.75;}
     .status-dot{display:inline-block; width:9px; height:9px; border-radius:50%; vertical-align:middle; border:1.5px solid transparent; box-sizing:border-box;}
     .status-dot.status-none{background:transparent; border-color:var(--line-strong);}
     .status-dot.status-green{background:var(--accent); border-color:var(--accent);}
@@ -1490,7 +1515,8 @@ function normalizeTask(t){
     status: sanitizeStatus(t.status),
     predecessors: normalizePredecessors(t.predecessors),
     parentId: t.parentId || null,
-    collapsed: !!t.collapsed
+    collapsed: !!t.collapsed,
+    tags: Array.isArray(t.tags) ? t.tags.filter(x=>typeof x==='string' && x.trim()).map(x=>x.trim()) : []
   };
 }
 
@@ -1660,6 +1686,37 @@ function canonicalizeResourceCasing(){
   return changed;
 }
 
+/** Tag names are matched case-insensitively, same reasoning and same "prefer capitalized" heuristic
+ *  as `canonicalizeResourceCasing()` above — so "PO" and "po" collapse to one tag rather than
+ *  silently forking the vocabulary. Unlike resources, tags apply to every task type (no rollup, no
+ *  parent-task exclusion — see the Task List "Tags" section of ARCHITECTURE.md). Runs defensively at
+ *  the start of every recalc, same as resources, covering both typed edits and files loaded from
+ *  disk that already contain case variants — the popover/modal UI can't introduce a variant itself
+ *  (new tags are checked against `allTags()` before being added), so this exists purely as a safety
+ *  net for hand-authored or foreign-tool-written files. */
+function canonicalizeTagCasing(){
+  const canonical = new Map(); // lowercase key -> preferred display casing
+  const looksBetter = (current, candidate) => /^[A-Z]/.test(candidate) && !/^[A-Z]/.test(current);
+  for(const t of state.tasks){
+    for(const tag of (t.tags||[])){
+      const key = tag.toLowerCase();
+      if(!canonical.has(key)) canonical.set(key, tag);
+      else if(looksBetter(canonical.get(key), tag)) canonical.set(key, tag);
+    }
+  }
+  let changed = false;
+  for(const t of state.tasks){
+    if(!t.tags || !t.tags.length) continue;
+    const mapped = t.tags.map(tag=>canonical.get(tag.toLowerCase()) || tag);
+    const deduped = Array.from(new Set(mapped));
+    if(deduped.length!==t.tags.length || deduped.some((tag,i)=>tag!==t.tags[i])){
+      t.tags = deduped;
+      changed = true;
+    }
+  }
+  return changed;
+}
+
 /** Milestones (0-duration tasks) don't carry resources — a single point in time isn't "worked on".
  *  Enforced here rather than only in the UI so it holds regardless of how duration was changed
  *  (typed directly, edited via modal, or loaded from a file that had both set). */
@@ -1678,6 +1735,7 @@ function recalcAll(){
   if(!state.tasks.length) return;
   stripCircularPredecessors();
   canonicalizeResourceCasing();
+  canonicalizeTagCasing();
   clearMilestoneResources();
   for(let iter=0; iter<12; iter++){
     let changed = false;
@@ -2004,6 +2062,13 @@ function renderTaskTable(){
     if(depCount) bindHoverTooltip(tdDeps.querySelector('button'), ()=>buildDepsTooltipHtml(t));
     tr.appendChild(tdDeps);
 
+    // --- tags ---
+    const tdTags = document.createElement('td');
+    const tagCount = (t.tags||[]).length;
+    tdTags.innerHTML = `<button class="chip-btn tag-chip ${tagCount?'filled':''}" data-act="tags">${tagCount ? tagCount + ' tag' + (tagCount>1?'s':'') : '+ tag'}</button>`;
+    if(tagCount) bindHoverTooltip(tdTags.querySelector('button'), ()=>buildTagsTooltipHtml(t));
+    tr.appendChild(tdTags);
+
     // --- notes/description ---
     const tdNotes = document.createElement('td');
     const hasNotes = t.description || t.notes;
@@ -2056,6 +2121,13 @@ function buildDepsTooltipHtml(t){
   return html;
 }
 
+function buildTagsTooltipHtml(t){
+  if(!t.tags || !t.tags.length) return null;
+  let html = `<div class="tt-title">Tags</div>`;
+  html += t.tags.map(tag=>`<div class="tt-row"><b>${escapeHtml(tag)}</b></div>`).join('');
+  return html;
+}
+
 function buildGanttTooltipHtml(t){
   let html = `<div class="tt-title">${statusDotHtml(t.status)} ${escapeHtml(displayName(t))}</div>`;
   if(isMilestone(t)){
@@ -2064,6 +2136,7 @@ function buildGanttTooltipHtml(t){
     html += `<div class="tt-meta">${fmtDate(t.start)} → ${fmtDate(t.end)} · ${t.duration}d · ${t.percentComplete}% complete</div>`;
   }
   html += `<div class="tt-label">Resources</div><div class="tt-meta">${(t.resources&&t.resources.length)?escapeHtml(t.resources.join(', ')):'<span class="tt-empty">unassigned</span>'}</div>`;
+  if(t.tags && t.tags.length) html += `<div class="tt-label">Tags</div><div class="tt-meta">${escapeHtml(t.tags.join(', '))}</div>`;
   if(t.description) html += `<div class="tt-label">Description</div><div class="tt-section">${escapeHtml(t.description)}</div>`;
   if(t.notes) html += `<div class="tt-label">Notes</div><div class="tt-section">${escapeHtml(t.notes)}</div>`;
   const dependents = dependentsOf(t.id);
@@ -2101,6 +2174,7 @@ document.getElementById('task-tbody').addEventListener('click', (e)=>{
   else if(act==='add-sub'){ if(confirmParentOverwrite(byId(id))) addTask(null, id); }
   else if(act==='delete') deleteTask(id);
   else if(act==='deps') openDepsPopover(btn, id);
+  else if(act==='tags') openTagsPopover(btn, id);
   else if(act==='notes') openNotesModal(id);
 });
 
@@ -2498,6 +2572,91 @@ function outsidePopoverClick(e){
 }
 
 /* =========================================================================
+   POPOVER: tags
+   ========================================================================= */
+
+/** Adds `rawTag` to task `t`'s tags, case-insensitively matching an existing tag's casing rather
+ *  than forking the vocabulary (e.g. typing "PO" when "po" is already used elsewhere on some other
+ *  task keeps "po", not both). No-ops on an empty/whitespace-only input or a tag already on this
+ *  task. Shared by both the Task List popover and the edit modal's tag widget — see
+ *  `renderTagPickerInto()` below, which both call into. */
+function addTagToTask(t, rawTag){
+  const trimmed = (rawTag||'').trim();
+  if(!trimmed) return false;
+  const existing = allTags().find(tag=>tag.toLowerCase()===trimmed.toLowerCase());
+  const canonical = existing || trimmed;
+  t.tags = t.tags || [];
+  if(t.tags.includes(canonical)) return false;
+  t.tags.push(canonical);
+  return true;
+}
+
+/** Renders the shared tag-picker widget (checkbox list of every tag used anywhere, plus an "add a
+ *  new tag" field) into `container`, and wires it up against task `t`. `onChange` runs after every
+ *  toggle/add — the Task List popover uses it to recalc+re-render+reopen itself (same pattern as
+ *  the Deps popover); the edit modal uses it to just refresh its own snapshot-comparison state,
+ *  since the modal's own Save/Cancel flow handles committing the change. */
+function renderTagPickerInto(container, t, onChange){
+  const tags = allTags();
+  const rowsHtml = tags.length ? tags.map(tag=>{
+    const checked = (t.tags||[]).includes(tag);
+    return `<label class="pop-row"><input type="checkbox" value="${escapeAttr(tag)}" ${checked?'checked':''}> ${escapeHtml(tag)}</label>`;
+  }).join('') : `<div class="pop-empty">No tags yet — add one below.</div>`;
+  container.innerHTML = `<div class="popover-rows">${rowsHtml}</div>
+    <div class="tag-add-row">
+      <input type="text" class="tag-add-input" placeholder="New tag..." maxlength="40">
+      <button type="button" class="sm-btn tag-add-btn">Add</button>
+    </div>`;
+  container.querySelectorAll('input[type=checkbox]').forEach(cb=>{
+    cb.addEventListener('change', ()=>{
+      t.tags = Array.from(container.querySelectorAll('input[type=checkbox]:checked')).map(x=>x.value);
+      onChange();
+    });
+  });
+  const addInput = container.querySelector('.tag-add-input');
+  const addBtn = container.querySelector('.tag-add-btn');
+  const doAdd = ()=>{ if(addTagToTask(t, addInput.value)) onChange(); };
+  addBtn.addEventListener('click', doAdd);
+  addInput.addEventListener('keydown', e=>{
+    if(e.key==='Enter'){ e.preventDefault(); doAdd(); }
+  });
+  addInput.addEventListener('click', e=>e.stopPropagation());
+}
+
+function openTagsPopover(anchorBtn, taskId){
+  const root = document.getElementById('popover-root');
+  const t = byId(taskId);
+  const rect = anchorBtn.getBoundingClientRect();
+
+  root.innerHTML = `<div class="popover">
+      <div class="popover-head"><h4>Tags</h4><button type="button" class="popover-close" title="Close (Esc)">&times;</button></div>
+      <div class="tag-picker-body"></div>
+    </div>`;
+  const popEl = root.querySelector('.popover');
+  popEl.style.top = (rect.bottom+window.scrollY+4)+'px';
+  popEl.style.left = popoverLeftClamp(rect)+'px';
+  root.querySelector('.popover-close').addEventListener('click', closePopoverFully);
+
+  // A nested container, not popEl itself — renderTagPickerInto() replaces its target's whole
+  // innerHTML, which would otherwise wipe out the .popover-head above it.
+  renderTagPickerInto(root.querySelector('.tag-picker-body'), t, ()=>{
+    markDirty();
+    recalcAll();
+    renderAll();
+    // reopen so it stays visible with fresh state, same pattern as the Deps popover
+    openTagsPopover(document.querySelector(`tr[data-id="${taskId}"] [data-act="tags"]`), taskId);
+  });
+
+  setTimeout(()=>{
+    activePopoverOutsideHandler = outsideTagsPopoverClick;
+    document.addEventListener('click', activePopoverOutsideHandler);
+  }, 0);
+}
+function outsideTagsPopoverClick(e){
+  if(!e.target.closest('.popover') && !e.target.closest('[data-act="tags"]')) closePopoverFully();
+}
+
+/* =========================================================================
    MODAL: notes / description
    ========================================================================= */
 function openNotesModal(taskId){
@@ -2546,6 +2705,10 @@ function openTaskEditModal(taskId){
   // still has to differ between the two.
   let pendingDeps = (t.predecessors||[]).map(l=>({id:l.id, lag:l.lag||0}));
   const pendingLink = id => pendingDeps.find(l=>l.id===id);
+  // Tags follow the same "commit only on Save" model as everything else in this modal (unlike the
+  // Task List popover, which commits each toggle live) — see renderTagPickerInto()'s doc comment.
+  // A plain {tags: [...]} holder rather than editing t.tags directly, so Cancel genuinely discards.
+  const pendingTags = { tags: (t.tags||[]).slice() };
 
   const depsRows = eligible.length ? eligible.map(id=>{
     const link = pendingLink(id);
@@ -2634,6 +2797,11 @@ function openTaskEditModal(taskId){
           <div style="max-height:130px; overflow:auto; border:1px solid var(--line-strong); border-radius:6px; padding:8px 14px 8px 8px;" id="te-dep-rows">${depsRows}</div>
         </div>
 
+        <div class="field">
+          <label>Tags</label>
+          <div style="max-height:130px; overflow:auto; border:1px solid var(--line-strong); border-radius:6px; padding:8px 14px 8px 8px;" id="te-tags-wrap"></div>
+        </div>
+
         <div class="field"><label>Description</label><textarea id="te-desc">${escapeHtml(t.description)}</textarea></div>
         <div class="field"><label>Notes</label><textarea id="te-notes">${escapeHtml(t.notes)}</textarea></div>
       </div>
@@ -2681,6 +2849,12 @@ function openTaskEditModal(taskId){
     onLagChange: (id, newLag) => { const link = pendingLink(id); if(link) link.lag = Math.round(newLag); }
   });
   bindDepNameTooltips(document.getElementById('te-dep-rows'));
+
+  const tagsWrap = document.getElementById('te-tags-wrap');
+  function renderModalTagPicker(){
+    renderTagPickerInto(tagsWrap, pendingTags, renderModalTagPicker);
+  }
+  renderModalTagPicker();
 
   const depFilterInput = document.getElementById('te-dep-filter');
   if(depFilterInput){
@@ -2743,6 +2917,7 @@ function openTaskEditModal(taskId){
       status: document.getElementById('te-status').value,
       resources: readResources(),
       deps: pendingDeps.map(l=>`${l.id}:${l.lag}`).sort().join(','),
+      tags: pendingTags.tags.slice().sort().join(','),
       desc: document.getElementById('te-desc').value,
       notes: document.getElementById('te-notes').value
     });
@@ -2797,6 +2972,7 @@ function openTaskEditModal(taskId){
       if(isMilestone(t) && !isParent) t.resources = [];
     }
     t.predecessors = pendingDeps.map(l=>({id: l.id, lag: l.lag}));
+    t.tags = pendingTags.tags.slice();
     t.status = sanitizeStatus(document.getElementById('te-status').value);
     t.description = document.getElementById('te-desc').value;
     t.notes = document.getElementById('te-notes').value;
@@ -2912,6 +3088,7 @@ function renderGantt(){
           ${isParent?`<button class="twisty g-twisty" data-act="toggle" data-id="${t.id}">${t.collapsed?'▶':'▼'}</button>`:'<span class="twisty"></span>'}
           ${statusDotHtml(t.status)}
           ${milestone?'<span class="milestone-mark" title="Milestone">◆</span>':''}
+          ${(t.tags&&t.tags.length)?`<span class="g-tag-mark" title="Tagged: ${escapeAttr(t.tags.join(', '))}">🏷</span>`:''}
           <span class="g-name-txt">${escapeHtml(displayName(t))}</span>
           <button class="g-info-btn" tabindex="-1" aria-label="Task details">ⓘ</button>
           <span class="pct-tag">${t.percentComplete}%</span>
@@ -3160,6 +3337,14 @@ function allResources(){
   return Array.from(set).sort();
 }
 
+/** Every tag currently used anywhere in the file, sorted — the vocabulary offered by the tag
+ *  popover's checkbox list (Task List chip, edit modal, and the Dashboard's "Filter by tag"). */
+function allTags(){
+  const set = new Set();
+  state.tasks.forEach(t=>(t.tags||[]).forEach(tag=>set.add(tag)));
+  return Array.from(set).sort();
+}
+
 function classifyTask(t){
   const today = todayISO();
   if(hasChildren(t.id)) return null; // only leaf tasks are actionable work items
@@ -3173,9 +3358,10 @@ function classifyTask(t){
 function taskItemHtml(t){
   const milestone = isMilestone(t);
   const dateText = milestone ? fmtDate(t.start) : `${fmtDate(t.start)} → ${fmtDate(t.end)}`;
+  const tagsText = (t.tags && t.tags.length) ? ` · 🏷 ${escapeHtml(t.tags.join(', '))}` : '';
   return `<div class="dash-item ${milestone?'is-milestone':''}" data-task-id="${t.id}" title="Double-click to edit">
       <div class="t-name">${statusDotHtml(t.status)} ${milestone?'<span class="milestone-mark" title="Milestone">◆</span> ':''}${escapeHtml(displayName(t))}</div>
-      <div class="t-meta">${dateText} · ${(t.resources||[]).join(', ')||'unassigned'}</div>
+      <div class="t-meta">${dateText} · ${(t.resources||[]).join(', ')||'unassigned'}${tagsText}</div>
       ${milestone?'':`<div class="t-bar"><i style="width:${t.percentComplete}%"></i></div>`}
     </div>`;
 }
@@ -3237,6 +3423,74 @@ function outsideResourcePopoverClick(e){
   if(!e.target.closest('.popover') && e.target.id!=='dash-resource-btn') closePopoverFully();
 }
 document.getElementById('dash-resource-btn').addEventListener('click', (e)=>openResourceFilterPopover(e.currentTarget));
+
+let dashTagFilter = []; // array of selected tag names; empty = all. Combines with dashResourceFilter
+                         // as AND — a task must match a selected resource *and* a selected tag when
+                         // both are active — see renderDashboard()'s bucket filter below.
+
+function updateTagFilterButton(){
+  const btn = document.getElementById('dash-tag-btn');
+  if(!dashTagFilter.length) btn.textContent = 'All tags';
+  else if(dashTagFilter.length<=2) btn.textContent = dashTagFilter.join(', ');
+  else btn.textContent = dashTagFilter.length + ' tags selected';
+}
+
+function openTagFilterPopover(anchorBtn){
+  const root = document.getElementById('popover-root');
+  const tags = allTags();
+  const rect = anchorBtn.getBoundingClientRect();
+  const rowsHtml = tags.length ? tags.map(tag=>{
+    const checked = dashTagFilter.includes(tag);
+    return `<label class="pop-row"><input type="checkbox" value="${escapeAttr(tag)}" ${checked?'checked':''}> ${escapeHtml(tag)}</label>`;
+  }).join('') : `<div class="pop-empty">No tags on any task yet.</div>`;
+
+  root.innerHTML = `<div class="popover" style="top:${rect.bottom+window.scrollY+4}px; left:${popoverLeftClamp(rect)}px;">
+      <div class="popover-head"><h4>Filter by tag</h4><button type="button" class="popover-close" title="Close (Esc)">&times;</button></div>
+      <div class="popover-rows">${rowsHtml}</div>
+      ${tags.length?`<div style="display:flex; gap:6px; margin-top:8px; padding-top:8px; border-top:1px solid var(--line);">
+        <button class="sm-btn" id="tag-filter-all" style="flex:1;">Select all</button>
+        <button class="sm-btn" id="tag-filter-none" style="flex:1;">Clear</button>
+      </div>`:''}
+    </div>`;
+  root.querySelector('.popover-close').addEventListener('click', closePopoverFully);
+
+  function applyAndRerender(){
+    updateTagFilterButton();
+    renderDashboard();
+  }
+  root.querySelectorAll('input[type=checkbox]').forEach(cb=>{
+    cb.addEventListener('change', ()=>{
+      dashTagFilter = Array.from(root.querySelectorAll('input[type=checkbox]:checked')).map(x=>x.value);
+      applyAndRerender();
+    });
+  });
+  const allBtn = document.getElementById('tag-filter-all');
+  const noneBtn = document.getElementById('tag-filter-none');
+  if(allBtn) allBtn.addEventListener('click', ()=>{
+    dashTagFilter = tags.slice();
+    applyAndRerender();
+    openTagFilterPopover(document.getElementById('dash-tag-btn'));
+  });
+  if(noneBtn) noneBtn.addEventListener('click', ()=>{
+    dashTagFilter = [];
+    applyAndRerender();
+    openTagFilterPopover(document.getElementById('dash-tag-btn'));
+  });
+  setTimeout(()=>{
+    activePopoverOutsideHandler = outsideTagFilterPopoverClick;
+    document.addEventListener('click', activePopoverOutsideHandler);
+  }, 0);
+}
+function outsideTagFilterPopoverClick(e){
+  if(!e.target.closest('.popover') && e.target.id!=='dash-tag-btn') closePopoverFully();
+}
+document.getElementById('dash-tag-btn').addEventListener('click', (e)=>openTagFilterPopover(e.currentTarget));
+document.getElementById('dash-clear-filters-btn').addEventListener('click', ()=>{
+  dashResourceFilter = [];
+  dashTagFilter = [];
+  closePopoverFully(); // in case either filter's popover is open when this is clicked
+  renderDashboard();
+});
 document.getElementById('dash-content').addEventListener('dblclick', (e)=>{
   const item = e.target.closest('.dash-item');
   if(!item) return;
@@ -3257,17 +3511,27 @@ document.getElementById('gantt-scroll').addEventListener('dblclick', (e)=>{
 });
 
 function renderDashboard(){
-  // drop any selected resources that no longer exist (e.g. renamed/removed)
+  // drop any selected resources/tags that no longer exist (e.g. renamed/removed)
   const resources = allResources();
   dashResourceFilter = dashResourceFilter.filter(r=>resources.includes(r));
   updateResourceFilterButton();
+  const tags = allTags();
+  dashTagFilter = dashTagFilter.filter(tag=>tags.includes(tag));
+  updateTagFilterButton();
+  // Shown only once a filter is actually narrowing something — with two independent filters now
+  // (resource + tag), it's easy to forget one is still active after moving on; a visible-only-
+  // when-relevant reset is both the fix and its own indicator that something's filtered.
+  document.getElementById('dash-clear-filters-btn').style.display =
+    (dashResourceFilter.length || dashTagFilter.length) ? '' : 'none';
 
   const content = document.getElementById('dash-content');
   const activeFilter = dashResourceFilter.length ? dashResourceFilter : null;
+  const activeTagFilter = dashTagFilter.length ? dashTagFilter : null;
 
   const buckets = {overdue:[], current:[], upcoming:[], 'upcoming-milestone':[]};
   for(const t of state.tasks){
     if(activeFilter && !(t.resources||[]).some(r=>activeFilter.includes(r))) continue;
+    if(activeTagFilter && !(t.tags||[]).some(tag=>activeTagFilter.includes(tag))) continue;
     const cls = classifyTask(t);
     if(cls && buckets[cls]) buckets[cls].push(t);
   }
@@ -3293,14 +3557,16 @@ function renderDashboard(){
   if(peopleToShow.length || !activeFilter){
     html += `<div class="resource-group-title" style="margin-top:24px;">By person</div><div class="dash-grid">`;
     for(const r of peopleToShow){
-      const mine = state.tasks.filter(t=>!hasChildren(t.id) && (t.resources||[]).includes(r) && classifyTask(t)!=='completed');
+      const mine = state.tasks.filter(t=>!hasChildren(t.id) && (t.resources||[]).includes(r) && classifyTask(t)!=='completed'
+        && (!activeTagFilter || (t.tags||[]).some(tag=>activeTagFilter.includes(tag))));
       mine.sort((a,b)=>(a.end||'').localeCompare(b.end||''));
       html += `<div class="dash-card"><h3>${escapeHtml(r)}<span class="count">${mine.length}</span></h3>
         <div class="dash-list">${mine.length?mine.map(taskItemHtml).join(''):`<div class="dash-empty">No active tasks.</div>`}</div></div>`;
     }
     if(!activeFilter){
       // virtual "person" for tasks nobody's been assigned to yet — only makes sense in the unfiltered view
-      const unassigned = state.tasks.filter(t=>!hasChildren(t.id) && !isMilestone(t) && (!t.resources||!t.resources.length) && classifyTask(t)!=='completed');
+      const unassigned = state.tasks.filter(t=>!hasChildren(t.id) && !isMilestone(t) && (!t.resources||!t.resources.length) && classifyTask(t)!=='completed'
+        && (!activeTagFilter || (t.tags||[]).some(tag=>activeTagFilter.includes(tag))));
       unassigned.sort((a,b)=>(a.end||'').localeCompare(b.end||''));
       html += `<div class="dash-card"><h3>Unassigned<span class="count">${unassigned.length}</span></h3>
         <div class="dash-list">${unassigned.length?unassigned.map(taskItemHtml).join(''):`<div class="dash-empty">No unassigned tasks.</div>`}</div></div>`;
