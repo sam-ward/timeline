@@ -1723,6 +1723,29 @@ function stripCircularPredecessors(){
  *  one exists. Runs defensively at the start of every recalc (covers typed edits and files loaded
  *  from disk that already contain case variants). Parent tasks are skipped — their resource list is
  *  itself a rollup of their children and gets recomputed afterward. */
+/** Rebuilds state.tasks into proper pre-order tree order — each parent immediately followed by
+ *  its whole subtree, children in childrenOf() order — so the raw array always matches what the
+ *  Task List/Gantt (which walk by parentId via flattenVisible()) actually show. Self-heals array-
+ *  order drift regardless of source: a schedule saved before moveTask() was fixed to swap whole
+ *  subtrees (#40), a hand-edited file, etc. Run every recalcAll(), same as canonicalizeResourceCasing()/
+ *  canonicalizeTagCasing() below, so nothing that reads state.tasks in raw order — eligiblePredecessorIds()
+ *  (the "Depends on" pickers) and save serialization — can ever go stale relative to the tree. */
+function canonicalizeTaskOrder(){
+  const out = [];
+  (function walk(parentId){
+    for(const t of childrenOf(parentId)){
+      out.push(t);
+      walk(t.id);
+    }
+  })(null);
+  // Safety net: don't silently drop a task if the tree-walk somehow missed it (e.g. a parentId
+  // pointing at a task that no longer exists) — append anything left over rather than lose data.
+  if(out.length !== state.tasks.length){
+    const seen = new Set(out.map(t=>t.id));
+    for(const t of state.tasks) if(!seen.has(t.id)) out.push(t);
+  }
+  state.tasks = out;
+}
 function canonicalizeResourceCasing(){
   const canonical = new Map(); // lowercase key -> preferred display casing
   const looksBetter = (current, candidate) => /^[A-Z]/.test(candidate) && !/^[A-Z]/.test(current);
@@ -1796,6 +1819,7 @@ function clearMilestoneResources(){
 function recalcAll(){
   if(!state.tasks.length) return;
   stripCircularPredecessors();
+  canonicalizeTaskOrder();
   canonicalizeResourceCasing();
   canonicalizeTagCasing();
   clearMilestoneResources();

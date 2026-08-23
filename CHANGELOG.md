@@ -7,6 +7,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+### Fixed
+
+- The #40 fix stopped `moveTask()` from scrambling task array order
+  going forward, but didn't repair a schedule already saved with
+  scrambled order from before the fix — reloading it still showed the
+  wrong order in the "Depends on" pickers. `recalcAll()` now rebuilds
+  task order into proper tree order every time (alongside its existing
+  resource/tag-casing cleanup), so any array-order drift self-heals
+  automatically regardless of source. (#43)
+
 ## [1.3.1] - 2026-08-23
 
 ### Fixed
