@@ -44,7 +44,7 @@ const DEBUG_EXPORTS = [
   'eligiblePredecessorIds', 'serialize', 'loadFromText', 'allResources',
   'classifyTask', 'stepWorkingDays', 'normalizeTask', 'taskHierarchyPath',
   'moveTask', 'dependentsOf', 'setAllCollapsed', 'allTags', 'addTagToTask',
-  'canonicalizeTagCasing'
+  'canonicalizeTagCasing', 'canonicalizeTaskOrder'
 ];
 
 function wait(ms) { return new Promise(r => setTimeout(r, ms)); }
@@ -433,6 +433,17 @@ async function main() {
 
     D.moveTask(p2.id, 1); // move back down, Phase 1 above Phase 2 again
     check('moving back down restores P1, P1-A, P1-B, P2, P2-A with subtrees intact',
+      rawOrder().join(',') === 'MT Phase 1,MT Phase 1 - A,MT Phase 1 - B,MT Phase 2,MT Phase 2 - A');
+
+    // A file saved by the old, pre-fix moveTask() (or hand-edited) can have raw array order that
+    // doesn't match the parentId tree at all — recalcAll() (via canonicalizeTaskOrder()) needs to
+    // straighten that out on its own, not just preserve order going forward from here.
+    const byId2 = id => D.state.tasks.find(t=>t.id===id);
+    const scrambled = D.state.tasks.filter(t=>![p1.id,p1a.id,p1b.id,p2.id,p2a.id].includes(t.id));
+    scrambled.push(byId2(p2a.id), byId2(p1.id), byId2(p2.id), byId2(p1a.id), byId2(p1b.id));
+    D.state.tasks = scrambled;
+    D.recalcAll();
+    check('recalcAll() self-heals array order scrambled by something other than moveTask()',
       rawOrder().join(',') === 'MT Phase 1,MT Phase 1 - A,MT Phase 1 - B,MT Phase 2,MT Phase 2 - A');
   }
 
