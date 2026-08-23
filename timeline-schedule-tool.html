@@ -1939,15 +1939,36 @@ function deleteTask(id){
   renderAll();
 }
 
-function moveTask(id, dir){ // dir: -1 up, +1 down (within siblings)
+/** Swaps `id` with its next/previous sibling (dir: -1 up, +1 down), moving each one's *entire*
+ *  subtree together as a block. The Task List and Gantt render via flattenVisible(), which walks
+ *  the tree by parentId and so doesn't care about raw state.tasks array order — but other things
+ *  do read that raw order directly (e.g. eligiblePredecessorIds(), and whatever serializes
+ *  state.tasks on save), so a parent task's children can't be left behind at their old array
+ *  index when the parent moves, or those views end up out of sync with what the tree actually
+ *  looks like. Rebuilding both subtree blocks by id (rather than assuming they're contiguous)
+ *  also self-heals any array-order drift left over from before this fix. */
+function moveTask(id, dir){
   const t = byId(id);
   const sibs = childrenOf(t.parentId);
   const pos = sibs.findIndex(s=>s.id===id);
   const swapWith = sibs[pos+dir];
   if(!swapWith) return;
-  const ia = state.tasks.findIndex(x=>x.id===t.id);
-  const ib = state.tasks.findIndex(x=>x.id===swapWith.id);
-  [state.tasks[ia], state.tasks[ib]] = [state.tasks[ib], state.tasks[ia]];
+  const idSet = new Set([id, ...descendantIds(id)]);
+  const otherSet = new Set([swapWith.id, ...descendantIds(swapWith.id)]);
+  const idBlock = state.tasks.filter(x=>idSet.has(x.id));
+  const otherBlock = state.tasks.filter(x=>otherSet.has(x.id));
+  const rest = [];
+  let insertAt = null;
+  state.tasks.forEach(x=>{
+    if(idSet.has(x.id) || otherSet.has(x.id)){
+      if(insertAt===null) insertAt = rest.length; // first block member's slot is where the swapped pair goes back in
+    } else {
+      rest.push(x);
+    }
+  });
+  const swappedBlock = dir < 0 ? [...idBlock, ...otherBlock] : [...otherBlock, ...idBlock];
+  rest.splice(insertAt, 0, ...swappedBlock);
+  state.tasks = rest;
   markDirty();
   renderAll();
 }

@@ -7,6 +7,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+### Fixed
+
+- Task List: using the ▲/▼ reorder buttons (or Ctrl+Shift+Up/Down) to
+  move a parent task past a sibling only swapped the two tasks' own
+  rows in the underlying data, leaving the moved-past parent's
+  children behind at their old position. The Task List and Gantt
+  looked fine (both render by walking the parent/child tree, not raw
+  array order), but anything reading that raw order directly — like
+  the "Depends on" pickers' task list, and the order tasks are saved
+  in — went out of sync with what the tree actually showed. Reordering
+  now moves a task's whole subtree together. (#40)
+
 ## [1.3.0] - 2026-08-22
 
 ### Added

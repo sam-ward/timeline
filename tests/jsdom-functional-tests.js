@@ -405,6 +405,37 @@ async function main() {
       orderNow().join(',') === 'Reorder Z,Reorder X,Reorder Y');
   }
 
+  console.log('\n--- moveTask() carries a parent\'s whole subtree with it (#40) ---');
+  {
+    // Two top-level parents, each with two children, so a swap has a real subtree to drag along.
+    const p1 = D.addTask(null); p1.name = 'MT Phase 1';
+    const p1a = D.addTask(null, p1.id); p1a.name = 'MT Phase 1 - A';
+    const p1b = D.addTask(null, p1.id); p1b.name = 'MT Phase 1 - B';
+    const p2 = D.addTask(null); p2.name = 'MT Phase 2';
+    const p2a = D.addTask(null, p2.id); p2a.name = 'MT Phase 2 - A';
+    D.recalcAll();
+    window.renderAll();
+    await wait(20);
+
+    // eligiblePredecessorIds() (and the "Depends on" pickers it feeds) iterate state.tasks in raw
+    // array order — the bug this test guards against left a moved parent's children stranded at
+    // their old index, out of sync with what the Task List/Gantt (which walk by parentId) show.
+    const rawOrder = () => D.state.tasks.filter(t=>[p1.id,p1a.id,p1b.id,p2.id,p2a.id].includes(t.id)).map(t=>t.name);
+    check('starting raw array order is P1, P1-A, P1-B, P2, P2-A',
+      rawOrder().join(',') === 'MT Phase 1,MT Phase 1 - A,MT Phase 1 - B,MT Phase 2,MT Phase 2 - A');
+
+    D.moveTask(p2.id, -1); // move Phase 2 up above Phase 1
+    check('moving Phase 2 up carries its child with it, ahead of Phase 1\'s whole subtree',
+      rawOrder().join(',') === 'MT Phase 2,MT Phase 2 - A,MT Phase 1,MT Phase 1 - A,MT Phase 1 - B');
+    check('Task List hierarchy (childrenOf) still has each parent\'s own children, unaffected either way',
+      D.childrenOf(p1.id).map(t=>t.id).join(',') === [p1a.id,p1b.id].join(',') &&
+      D.childrenOf(p2.id).map(t=>t.id).join(',') === [p2a.id].join(','));
+
+    D.moveTask(p2.id, 1); // move back down, Phase 1 above Phase 2 again
+    check('moving back down restores P1, P1-A, P1-B, P2, P2-A with subtrees intact',
+      rawOrder().join(',') === 'MT Phase 1,MT Phase 1 - A,MT Phase 1 - B,MT Phase 2,MT Phase 2 - A');
+  }
+
   console.log('\n--- Circular dependency prevention ---');
   {
     const parent = D.addTask(null); parent.name = 'Phase';
