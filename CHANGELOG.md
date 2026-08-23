@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [1.3.1] - 2026-08-23
+
 ### Fixed
 
 - Task List: using the ▲/▼ reorder buttons (or Ctrl+Shift+Up/Down) to
@@ -235,7 +237,8 @@ version check), all of which shipped as part of this same tag.
   app header, with a best-effort check against the GitHub Releases API for
   a newer version.
 
-[Unreleased]: https://github.com/sam-ward/timeline/compare/v1.3.0...HEAD
+[Unreleased]: https://github.com/sam-ward/timeline/compare/v1.3.1...HEAD
+[1.3.1]: https://github.com/sam-ward/timeline/compare/v1.3.0...v1.3.1
 [1.3.0]: https://github.com/sam-ward/timeline/compare/v1.2.0...v1.3.0
 [1.2.0]: https://github.com/sam-ward/timeline/compare/v1.1.1...v1.2.0
 [1.1.1]: https://github.com/sam-ward/timeline/compare/v1.1.0...v1.1.1
