@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [1.4.0] - 2026-08-28
+
 ### Added
 
 - Export HTML now asks which sections to include (Gantt Chart, Task List, Status Summary) before
@@ -291,7 +293,8 @@ version check), all of which shipped as part of this same tag.
   app header, with a best-effort check against the GitHub Releases API for
   a newer version.
 
-[Unreleased]: https://github.com/sam-ward/timeline/compare/v1.3.2...HEAD
+[Unreleased]: https://github.com/sam-ward/timeline/compare/v1.4.0...HEAD
+[1.4.0]: https://github.com/sam-ward/timeline/compare/v1.3.2...v1.4.0
 [1.3.2]: https://github.com/sam-ward/timeline/compare/v1.3.1...v1.3.2
 [1.3.1]: https://github.com/sam-ward/timeline/compare/v1.3.0...v1.3.1
 [1.3.0]: https://github.com/sam-ward/timeline/compare/v1.2.0...v1.3.0
