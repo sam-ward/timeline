@@ -188,6 +188,56 @@ already on that task, and canonicalizes against `allTags()` case-insensitively b
 new tag typed as a case variant of an existing one is redirected to the existing spelling immediately,
 rather than relying on the next `recalcAll()` pass to clean it up after the fact.
 
+**Gotcha: the checkbox row list must be built from `holder.tags` too, not `allTags()` alone (#46).**
+`allTags()` scans the *global* vocabulary off `state.tasks` — real, already-committed tasks. In the
+edit modal, `holder` is `pendingTags`, an uncommitted local clone (see above), so a tag typed into the
+add box lands in `pendingTags.tags` immediately but has no way to reach `state.tasks` — and therefore
+`allTags()` — until Save actually writes it back to `t.tags`. Building the row list from `allTags()`
+alone meant adding a genuinely new tag in the modal looked like it silently did nothing: no new row,
+nothing shown as checked, right up until Save + reopening the modal made it visible for the first
+time. `renderTagPickerInto()` now builds the list from `Array.from(new Set([...allTags(),
+...(holder.tags||[])]))`, so a tag that only exists on the in-progress holder still renders (checked)
+immediately. The Task List popover never hit this, since its `holder` *is* the real task, always
+already part of `state.tasks`.
+
+**The add control is a collapsible `+ Add tag…` toggle, not an always-visible input (#47).** Partly to
+save space, but mainly because of a real layout bug: the edit modal used to render both the checkbox
+list and the "add a tag" input/button into one *outer* scrollable wrapper (`#te-tags-wrap`, its own
+`max-height`/`overflow:auto`), while `.popover-rows` (the checkbox list) already scrolls *internally*
+at its own smaller `max-height`. Nesting them meant the add row scrolled away along with the list
+inside that outer container instead of staying put — something the Task List's own popover never
+showed, since there the add row's container has no scroll of its own. Fixed by giving `#te-tags-wrap`
+no scroll of its own (only `.popover-rows` scrolls now) and moving the add control into `.tag-add-zone`,
+a sibling *below* `.popover-rows`, collapsed behind a `.tag-add-toggle-btn` link by default. Clicking it
+swaps in the `.tag-add-row` input/button in place (a local DOM swap, not a call to `onChange()` — that
+would recalc/re-render/reopen and immediately re-collapse it); it collapses back to the toggle either
+on a successful add or when the input's `blur` fires (clicking elsewhere, tabbing away).
+
+**Gotcha: every listener that swaps `.tag-add-zone`'s own `innerHTML` needs `stopPropagation()` on its
+triggering click** — the toggle button's click, and the Add button's click (its `onChange()` rebuilds/
+reopens the whole popover, or at least this whole widget in the modal). Without it: the swap detaches
+the clicked element from the document while its own click event is still bubbling, so by the time that
+event reaches the document-level "outside click" listener that closes an open popover
+(`outsideTagsPopoverClick`), `e.target.closest('.popover')` resolves against an already-detached node
+and finds nothing — read as a click *outside* the popover, closing the very popover the click was
+supposed to be acting on. Same idiom `.tag-add-input`'s own click listener already used, for the same
+underlying reason, before this bug existed to make the reason explicit. Separately, the Add button also
+needs `mousedown` with `preventDefault()` (not `click`) so it doesn't steal focus from the input before
+its own click fires — otherwise the input's `blur` (used to collapse the add row when focus leaves it)
+would collapse the row, and remove the button, before the button's `click` handler ever runs.
+
+**Gotcha: the modal's tag list needs a tighter cap than `.popover-rows`'s own default 220px.** That
+default is sized for a floating popover, which has nowhere else to put an overflowing list — but the
+edit modal is a different situation: `.modal` itself caps at `max-height:86vh; overflow:auto`, and the
+Tags field is one of several competing for that budget alongside Name, dates, Deps, Description, Notes,
+etc. Without a tighter cap, a task with enough tags could grow the Tags field past what the rest of the
+modal has room for, pushing the *whole modal* over its own 86vh cap — at which point the whole thing
+(header and footer included) starts scrolling as one unit, instead of just the tag list scrolling
+internally the way it's supposed to. `#te-tags-wrap .popover-rows{max-height:100px;}` scopes a smaller
+cap to just this context, without touching the popover's own 220px elsewhere. Verified with a Playwright
+check that the modal's own height is identical whether it holds 8 tags (already past this cap) or 25 —
+growing the tag count well beyond the cap must never grow the modal further.
+
 **Elsewhere a tagged task shows up, deliberately kept lightweight in different ways per surface:**
 
 - **Gantt label row** (`.g-tag-mark`, both `renderGantt()` and the static/export
@@ -850,6 +900,28 @@ already close to the window edge. Fixed by centralizing the clamp in one functio
 `POPOVER_MAX_WIDTH` (kept in sync with the CSS by comment, since there's no way to read a CSS rule's
 value back into JS without adding a runtime measurement step) instead of a second, silently-drifting
 guess. If you widen `.popover`'s `max-width` in CSS, update `POPOVER_MAX_WIDTH` in the same change.
+
+**Gotcha: vertical positioning needs the same treatment as horizontal, and used to have none at all
+(#48).** All four popovers (`openDepsPopover()`, `openTagsPopover()`, `openResourceFilterPopover()`,
+`openTagFilterPopover()`) set `top` to a bare `anchor.bottom + 4`, unconditionally opening flush below
+the button regardless of how close that button was to the bottom of the viewport. Because `.popover`
+is `position:absolute` in document coordinates rather than viewport-fixed, a popover tall enough (a
+task with a lot of tags or dependencies) near the bottom of a long Task List would render mostly or
+entirely below the visible viewport — reachable only by scrolling the *page* itself, which meant
+moving the mouse off the popover first, since opening it didn't scroll any of it into view.
+
+Fixed with a shared `positionPopover(popEl, anchorRect)`, the vertical counterpart to
+`popoverLeftClamp()`: prefers opening below (unchanged for the common case), flips to opening above
+the anchor when there's more room there, and as a last resort clamps to the viewport for a popover
+that doesn't fully fit on either side. All four call sites now call it after their `.popover` element
+is actually in the DOM, not from within the same template-string that creates it — unlike the
+horizontal clamp, the vertical decision needs the popover's own real rendered height (which depends on
+its content: row count, whether a filter box or footer buttons are present), not a fixed constant.
+**If you touch `openTagsPopover()` again:** it's the one call site where this ordering actually
+matters, not just as a style preference — `positionPopover()` has to run *after*
+`renderTagPickerInto()` has filled `.tag-picker-body`, since at the point the popover's own template
+string is first inserted, that container is still empty (just the header), so measuring at that point
+would produce a too-small height and effectively skip the flip logic.
 
 ### Copy/paste for date fields
 
