@@ -1262,7 +1262,13 @@ function buildGanttTimelineHtml(opts){
 function buildStaticGanttHtml(){
   const {html, width} = buildGanttTimelineHtml();
   if(!width) return html; // "no tasks" message
-  return `<div style="overflow:auto; max-height:520px; border:1px solid var(--line); border-radius:8px;">${html}</div>`;
+  // No max-height/vertical overflow (#53) — this is a read-only, standalone snapshot, not the
+  // interactive on-screen view, so there's no reason to keep it height-constrained: it should just
+  // expand to its full content height like the Task List and Status Summary sections already do.
+  // overflow-x stays scrollable, deliberately — a very wide date range genuinely can exceed a
+  // reasonable page width, and that's a real reason to scroll horizontally rather than shrink
+  // everything to illegible size (same reasoning `computePrintGanttParams()` documents for print).
+  return `<div style="overflow-x:auto; border:1px solid var(--line); border-radius:8px;">${html}</div>`;
 }
 
 /** Choose a day-column width that fits the whole date range within one printed landscape page,

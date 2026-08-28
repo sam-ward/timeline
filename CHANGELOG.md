@@ -9,6 +9,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ### Fixed
 
+- Export HTML: the Gantt Chart section was wrapped in a fixed-height, scrollable box — any schedule
+  with enough rows to exceed it showed an internal vertical scrollbar instead of the chart (and the
+  page around it) simply expanding to fit, the way the Task List and Status Summary sections already
+  do in the same export. It now always expands to its full height; it still scrolls horizontally for
+  a genuinely wide date range. (#53)
 - Task edit modal: adding a genuinely new tag (not already used on any other task) in the Tags
   field looked like it silently did nothing — the checkbox list didn't update, with no confirmation
   the tag had been added. It only actually appeared (checked) after saving and reopening the modal.
