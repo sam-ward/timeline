@@ -253,6 +253,61 @@ async function main() {
     await page.waitForTimeout(200);
   }
 
+  console.log('\n--- Popover vertical positioning: stays on-screen near the bottom of the viewport (#48) ---');
+  {
+    await page.click('.tab-btn[data-tab="tasks"]');
+    await page.waitForTimeout(150);
+    // Pad the list with enough rows that the last one's popover would previously have opened
+    // mostly or entirely below the viewport, and give it enough tags/deps that the popover itself
+    // is tall — both conditions #48 needs to reproduce.
+    const originalIds = await page.evaluate(() => state.tasks.map(t => t.id));
+    const padId = await page.evaluate(() => {
+      for (let i = 0; i < 20; i++) addTask(null);
+      const last = state.tasks[state.tasks.length - 1];
+      last.tags = Array.from({length: 10}, (_, i) => 'padtag' + i);
+      recalcAll(); renderAll();
+      return last.id;
+    });
+    await page.evaluate((id) => document.querySelector(`tr[data-id="${id}"]`).scrollIntoView({block: 'end'}), padId);
+    await page.waitForTimeout(150);
+
+    await page.click(`tr[data-id="${padId}"] [data-act="tags"]`);
+    await page.waitForTimeout(150);
+    let rect = await page.evaluate(() => document.querySelector('.popover').getBoundingClientRect().toJSON());
+    check('the Tags popover stays fully within the viewport near the bottom of a long list', rect.top >= 0 && rect.bottom <= (await page.evaluate(() => window.innerHeight)));
+    await page.keyboard.press('Escape');
+    await page.waitForTimeout(100);
+
+    await page.click(`tr[data-id="${padId}"] [data-act="deps"]`);
+    await page.waitForTimeout(150);
+    rect = await page.evaluate(() => document.querySelector('.popover').getBoundingClientRect().toJSON());
+    check('the Deps popover stays fully within the viewport near the bottom of a long list', rect.top >= 0 && rect.bottom <= (await page.evaluate(() => window.innerHeight)));
+    await page.keyboard.press('Escape');
+    await page.waitForTimeout(100);
+
+    // A popover with plenty of room below its anchor should still open downward as before —
+    // the fix should only kick in when there isn't room, not flip unconditionally.
+    const firstId = await page.evaluate(() => state.tasks[0].id);
+    await page.evaluate((id) => document.querySelector(`tr[data-id="${id}"]`).scrollIntoView({block: 'start'}), firstId);
+    await page.waitForTimeout(100);
+    await page.click(`tr[data-id="${firstId}"] [data-act="tags"]`);
+    await page.waitForTimeout(150);
+    const opensBelow = await page.evaluate(() => {
+      const pop = document.querySelector('.popover').getBoundingClientRect();
+      const btn = document.querySelector('[data-act="tags"]').getBoundingClientRect();
+      return pop.top >= btn.bottom - 1;
+    });
+    check('a popover with room below its anchor still opens downward, unchanged', opensBelow);
+    await page.keyboard.press('Escape');
+    await page.waitForTimeout(100);
+
+    // Remove the padding tasks so later tests' assumptions about task order/count still hold.
+    await page.evaluate((ids) => {
+      state.tasks = state.tasks.filter(t => ids.includes(t.id));
+      recalcAll(); renderAll();
+    }, originalIds);
+  }
+
   console.log('\n--- Tags: Task List popover (#26) ---');
   {
     await page.click('.tab-btn[data-tab="tasks"]');

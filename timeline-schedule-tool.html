@@ -2548,6 +2548,38 @@ function popoverLeftClamp(rect){
   return Math.max(8, left);
 }
 
+/** Positions an already-in-the-DOM `.popover` (`popEl`) against the button that opened it
+ *  (`anchorRect`, its `getBoundingClientRect()`). Horizontal uses the existing `popoverLeftClamp()`.
+ *  Vertical used to be a bare `rect.bottom + 4`, always opening flush below the anchor regardless of
+ *  how close it was to the bottom of the viewport — for a task with a long dependency/tag list near
+ *  the bottom of the Task List, the popover would render mostly or entirely below the visible
+ *  viewport. Because the popover is `position:absolute` (document coordinates, not viewport-fixed),
+ *  that content was only reachable by scrolling the *page* itself — which meant moving the mouse off
+ *  the popover (elsewhere over the page) before a wheel/scrollbar would do anything, since nothing
+ *  about the popover itself was scrolled into view by opening it.
+ *
+ *  Needs `popEl`'s real rendered height, which depends on its content (row count, whether a filter
+ *  box or footer buttons are present) — not a fixed constant the way `POPOVER_MAX_WIDTH` is for
+ *  width. So this must run after `popEl` is actually in the DOM (after the `innerHTML` assignment
+ *  that creates it), not baked into the same template string that creates it.
+ *
+ *  Prefers opening below the anchor (the natural reading direction) whenever it fits, or whenever
+ *  below simply has more room than above even if it doesn't fully fit (matches the pre-existing
+ *  behavior for the common case, and avoids flipping to above for a marginal gain). Flips to opening
+ *  above the anchor only when there's genuinely more room there. Final clamp to the viewport is a
+ *  last-resort for a popover that doesn't fully fit on *either* side (an unusually short window) —
+ *  favors showing as much of it as possible over strictly preferring one edge. */
+function positionPopover(popEl, anchorRect){
+  popEl.style.left = popoverLeftClamp(anchorRect) + 'px';
+  const popH = popEl.offsetHeight;
+  const spaceBelow = window.innerHeight - anchorRect.bottom - 8;
+  const spaceAbove = anchorRect.top - 8;
+  const openBelow = popH <= spaceBelow || spaceBelow >= spaceAbove;
+  let top = openBelow ? anchorRect.bottom + 4 : anchorRect.top - popH - 4;
+  top = Math.max(8, Math.min(top, window.innerHeight - popH - 8));
+  popEl.style.top = (top + window.scrollY) + 'px';
+}
+
 /* ---- shared dependency-row markup + lag interaction, used by both openDepsPopover() and
    openTaskEditModal() — see the "Dependency pickers" section of ARCHITECTURE.md ---- */
 
@@ -2646,11 +2678,12 @@ function openDepsPopover(anchorBtn, taskId){
     return depRowHtml(id, !!link, link?link.lag:0, '');
   }).join('') : `<div class="pop-empty">No other tasks available yet.</div>`;
 
-  root.innerHTML = `<div class="popover" style="top:${rect.bottom+window.scrollY+4}px; left:${popoverLeftClamp(rect)}px;">
+  root.innerHTML = `<div class="popover">
       <div class="popover-head"><h4>Depends on (finish → start)</h4><button type="button" class="popover-close" title="Close (Esc)">&times;</button></div>
       ${options.length>4?'<input type="text" class="popover-filter" placeholder="Filter tasks...">':''}
       <div class="popover-rows">${rowsHtml}</div>
     </div>`;
+  positionPopover(root.querySelector('.popover'), rect);
   root.querySelector('.popover-close').addEventListener('click', closePopoverFully);
   bindDepNameTooltips(root.querySelector('.popover-rows'));
   const filterInput = root.querySelector('.popover-filter');
@@ -2800,8 +2833,6 @@ function openTagsPopover(anchorBtn, taskId){
       <div class="tag-picker-body"></div>
     </div>`;
   const popEl = root.querySelector('.popover');
-  popEl.style.top = (rect.bottom+window.scrollY+4)+'px';
-  popEl.style.left = popoverLeftClamp(rect)+'px';
   root.querySelector('.popover-close').addEventListener('click', closePopoverFully);
 
   // A nested container, not popEl itself — renderTagPickerInto() replaces its target's whole
@@ -2813,6 +2844,10 @@ function openTagsPopover(anchorBtn, taskId){
     // reopen so it stays visible with fresh state, same pattern as the Deps popover
     openTagsPopover(document.querySelector(`tr[data-id="${taskId}"] [data-act="tags"]`), taskId);
   });
+  // Positioned after renderTagPickerInto() has actually filled .tag-picker-body, not before —
+  // positionPopover() needs popEl's real rendered height, and the popover is still just an empty
+  // header at the point it's first inserted above.
+  positionPopover(popEl, rect);
 
   setTimeout(()=>{
     activePopoverOutsideHandler = outsideTagsPopoverClick;
@@ -3553,7 +3588,7 @@ function openResourceFilterPopover(anchorBtn){
     return `<label class="pop-row"><input type="checkbox" value="${escapeAttr(r)}" ${checked?'checked':''}> ${escapeHtml(r)}</label>`;
   }).join('') : `<div class="pop-empty">No resources assigned to any task yet.</div>`;
 
-  root.innerHTML = `<div class="popover" style="top:${rect.bottom+window.scrollY+4}px; left:${popoverLeftClamp(rect)}px;">
+  root.innerHTML = `<div class="popover">
       <div class="popover-head"><h4>Filter by resource</h4><button type="button" class="popover-close" title="Close (Esc)">&times;</button></div>
       <div class="popover-rows">${rowsHtml}</div>
       ${resources.length?`<div style="display:flex; gap:6px; margin-top:8px; padding-top:8px; border-top:1px solid var(--line);">
@@ -3561,6 +3596,7 @@ function openResourceFilterPopover(anchorBtn){
         <button class="sm-btn" id="res-filter-none" style="flex:1;">Clear</button>
       </div>`:''}
     </div>`;
+  positionPopover(root.querySelector('.popover'), rect);
   root.querySelector('.popover-close').addEventListener('click', closePopoverFully);
 
   function applyAndRerender(){
@@ -3615,7 +3651,7 @@ function openTagFilterPopover(anchorBtn){
     return `<label class="pop-row"><input type="checkbox" value="${escapeAttr(tag)}" ${checked?'checked':''}> ${escapeHtml(tag)}</label>`;
   }).join('') : `<div class="pop-empty">No tags on any task yet.</div>`;
 
-  root.innerHTML = `<div class="popover" style="top:${rect.bottom+window.scrollY+4}px; left:${popoverLeftClamp(rect)}px;">
+  root.innerHTML = `<div class="popover">
       <div class="popover-head"><h4>Filter by tag</h4><button type="button" class="popover-close" title="Close (Esc)">&times;</button></div>
       <div class="popover-rows">${rowsHtml}</div>
       ${tags.length?`<div style="display:flex; gap:6px; margin-top:8px; padding-top:8px; border-top:1px solid var(--line);">
@@ -3623,6 +3659,7 @@ function openTagFilterPopover(anchorBtn){
         <button class="sm-btn" id="tag-filter-none" style="flex:1;">Clear</button>
       </div>`:''}
     </div>`;
+  positionPopover(root.querySelector('.popover'), rect);
   root.querySelector('.popover-close').addEventListener('click', closePopoverFully);
 
   function applyAndRerender(){

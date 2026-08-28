@@ -901,6 +901,28 @@ already close to the window edge. Fixed by centralizing the clamp in one functio
 value back into JS without adding a runtime measurement step) instead of a second, silently-drifting
 guess. If you widen `.popover`'s `max-width` in CSS, update `POPOVER_MAX_WIDTH` in the same change.
 
+**Gotcha: vertical positioning needs the same treatment as horizontal, and used to have none at all
+(#48).** All four popovers (`openDepsPopover()`, `openTagsPopover()`, `openResourceFilterPopover()`,
+`openTagFilterPopover()`) set `top` to a bare `anchor.bottom + 4`, unconditionally opening flush below
+the button regardless of how close that button was to the bottom of the viewport. Because `.popover`
+is `position:absolute` in document coordinates rather than viewport-fixed, a popover tall enough (a
+task with a lot of tags or dependencies) near the bottom of a long Task List would render mostly or
+entirely below the visible viewport — reachable only by scrolling the *page* itself, which meant
+moving the mouse off the popover first, since opening it didn't scroll any of it into view.
+
+Fixed with a shared `positionPopover(popEl, anchorRect)`, the vertical counterpart to
+`popoverLeftClamp()`: prefers opening below (unchanged for the common case), flips to opening above
+the anchor when there's more room there, and as a last resort clamps to the viewport for a popover
+that doesn't fully fit on either side. All four call sites now call it after their `.popover` element
+is actually in the DOM, not from within the same template-string that creates it — unlike the
+horizontal clamp, the vertical decision needs the popover's own real rendered height (which depends on
+its content: row count, whether a filter box or footer buttons are present), not a fixed constant.
+**If you touch `openTagsPopover()` again:** it's the one call site where this ordering actually
+matters, not just as a style preference — `positionPopover()` has to run *after*
+`renderTagPickerInto()` has filled `.tag-picker-body`, since at the point the popover's own template
+string is first inserted, that container is still empty (just the header), so measuring at that point
+would produce a too-small height and effectively skip the flip logic.
+
 ### Copy/paste for date fields
 
 `<input type="date">` doesn't support reliable cross-browser copy/paste on its own (locale-formatted
