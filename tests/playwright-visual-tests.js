@@ -507,6 +507,121 @@ async function main() {
     check('Cancel closes the picker without exporting', await page.evaluate(() => window.__lastExport === null));
   }
 
+  console.log('\n--- Export HTML: Task List Notes column wraps instead of widening (#51) ---');
+  {
+    const longNote = 'A fairly long description that should wrap onto multiple lines inside its own cell instead of stretching the whole table wider, the way it used to before this was fixed.';
+    const exportedHtml = await page.evaluate((longNote) => {
+      const design = state.tasks.find(t => t.name === 'Design');
+      design.description = longNote;
+      recalcAll();
+      let captured = null;
+      window.triggerTextDownload = (filename, content) => { captured = content; };
+      exportStaticHTML();
+      return captured;
+    }, longNote);
+
+    const exportPage = await browser.newPage({ viewport: { width: 1000, height: 700 } });
+    await exportPage.setContent(exportedHtml);
+    const metrics = await exportPage.evaluate((longNote) => {
+      const cell = Array.from(document.querySelectorAll('td.notes-export-cell')).find(td => td.textContent.includes(longNote.slice(0, 20)));
+      const rect = cell.getBoundingClientRect();
+      const table = document.getElementById('task-table');
+      return {
+        cellWidth: rect.width,
+        cellHeight: rect.height,
+        cellScrollWidth: cell.scrollWidth,
+        cellClientWidth: cell.clientWidth,
+        tableWidth: table.getBoundingClientRect().width,
+        pageScrollWidth: document.documentElement.scrollWidth,
+        viewportWidth: window.innerWidth,
+      };
+    }, longNote);
+    // Not a fixed max-width check (there's deliberately no longer one — see the #51 follow-up: the
+    // column is instead given the table's reclaimed leftover width). The actual invariant is that the
+    // long text wraps to multiple lines *within* whatever width the cell ends up at, rather than the
+    // cell auto-expanding to fit one long line — i.e. its content doesn't overflow its own box.
+    check('the Notes cell text wraps within its own box instead of overflowing it', metrics.cellScrollWidth <= metrics.cellClientWidth + 1);
+    check('the Notes cell grew taller to fit the wrapped text (more than one text line)', metrics.cellHeight > 24);
+    check('the exported page does not need horizontal scrolling because of the long note', metrics.pageScrollWidth <= metrics.viewportWidth + 1);
+    await exportPage.screenshot({ path: path.join(OUT_DIR, 'export-notes-wrap.png') });
+    await exportPage.close();
+
+    // Restore the original (short) description for later tests that assert on it.
+    await page.evaluate(() => {
+      const design = state.tasks.find(t => t.name === 'Design');
+      design.description = '';
+      recalcAll(); renderAll();
+    });
+  }
+
+  console.log('\n--- Export HTML: Task column shrinks to fit the longest name, freeing width for Notes (#51 follow-up) ---');
+  {
+    // A short-named task alongside the schedule's existing longer names ("Design Approved" etc.) —
+    // the Task column must size to the longest name across the whole column, not to this one row,
+    // so a short name here is exactly what should end up narrower than before this fix.
+    const originalIds = await page.evaluate(() => state.tasks.map(t => t.id));
+    const shortId = await page.evaluate(() => {
+      const t = addTask(null);
+      t.name = 'Q';
+      recalcAll(); renderAll();
+      return t.id;
+    });
+    const exportedHtml = await page.evaluate(() => {
+      let captured = null;
+      window.triggerTextDownload = (filename, content) => { captured = content; };
+      exportStaticHTML();
+      return captured;
+    });
+    const exportPage = await browser.newPage({ viewport: { width: 1200, height: 700 } });
+    await exportPage.setContent(exportedHtml);
+    const widths = await exportPage.evaluate(() => {
+      const nameCells = Array.from(document.querySelectorAll('#task-table td.col-name'));
+      const notesCells = Array.from(document.querySelectorAll('#task-table td.notes-export-cell'));
+      return {
+        // Every row in a column shares the same rendered width — checking one checks the column.
+        nameColumnWidth: nameCells[0].getBoundingClientRect().width,
+        notesColumnWidth: notesCells[0].getBoundingClientRect().width,
+      };
+    });
+    // 220 was .col-name's own min-width, sized for the interactive table's editable input — the
+    // exported column should no longer be pinned to it regardless of how short the longest name is.
+    check('the Task column is narrower than the old fixed 220px minimum', widths.nameColumnWidth < 220);
+    check('the Notes column is wider than it used to be capped at (previously max-width:320px + padding)', widths.notesColumnWidth > 340);
+    await exportPage.screenshot({ path: path.join(OUT_DIR, 'export-name-column-width.png') });
+    await exportPage.close();
+
+    await page.evaluate((ids) => {
+      state.tasks = state.tasks.filter(t => ids.includes(t.id));
+      recalcAll(); renderAll();
+    }, originalIds);
+  }
+
+  console.log('\n--- Export HTML: Task List name cell shows a tree connector for nested tasks (#51 follow-up) ---');
+  {
+    // "Phase X" / "Kickoff X" / "Hidden Milestone" already exist (added by the collapsed-row
+    // milestone test above) — a real multi-level hierarchy, reused here rather than building a new one.
+    const exportedHtml = await page.evaluate(() => {
+      let captured = null;
+      window.triggerTextDownload = (filename, content) => { captured = content; };
+      exportStaticHTML();
+      return captured;
+    });
+    const exportPage = await browser.newPage({ viewport: { width: 900, height: 500 } });
+    await exportPage.setContent(exportedHtml);
+    const info = await exportPage.evaluate(() => {
+      const rowFor = (name) => Array.from(document.querySelectorAll('#task-table tbody tr')).find(r => r.querySelector('.col-name span:last-child').textContent === name);
+      const hasConnector = (name) => !!rowFor(name)?.querySelector('.name-tree-connector');
+      return {
+        phaseX: hasConnector('Phase X'),       // root task — no connector
+        kickoffX: hasConnector('Kickoff X'),   // child of Phase X — connector
+      };
+    });
+    check('a root-level task has no tree connector', info.phaseX === false);
+    check('a nested task has the tree connector', info.kickoffX === true);
+    await exportPage.screenshot({ path: path.join(OUT_DIR, 'export-name-tree-connector.png'), fullPage: true });
+    await exportPage.close();
+  }
+
   console.log('\n--- Print rendering (the check that actually caught a real bug) ---');
   {
     // Trigger the Gantt print flow the same way a user clicking "Print / PDF" would,

@@ -1126,6 +1126,55 @@ documents for print). If you touch this again: only the vertical cap was ever th
 reintroduce a fixed height constant of any kind on this wrapper, but the horizontal one is intentional
 and should stay.
 
+**Gotcha: `#task-table td`'s shared `white-space:nowrap` needs a Notes-column override in the export
+(#51).** `buildStaticTaskListHtml()`'s Notes cell inlines the task's real `description`/`notes` text
+directly (`notesText`), unlike every other column, which is short, fixed-format content that
+genuinely should never wrap (dates, %, duration). Without an override, a long note just widened the
+whole exported table instead of wrapping — the interactive Task List never showed this, since its own
+Notes cell is just a "+ notes" chip button (`renderTaskTable()`'s `tdNotes`), never raw text, so the
+shared `nowrap` was harmless there. Fixed by giving the exported cell its own class
+(`notes-export-cell`) and a scoped override: `white-space:pre-wrap` (not plain `normal` — matches the
+same choice already made for this kind of free text elsewhere, see `.hover-tooltip .tt-section`, and
+actually preserves line breaks the user typed into Description/Notes, which `normal` would collapse),
+`overflow-wrap:break-word` (so one long unbroken token, e.g. a URL, still wraps instead of pushing the
+column wide anyway), and a `max-width`. Scoped to the class, not `#task-table td` itself, so the
+interactive Task List's own Notes cell is untouched.
+
+**Follow-up: a small tree connector on nested rows, once Notes wrapping made rows variable-height
+(#51 follow-up).** Once the fix above let the Notes column wrap, rows are no longer all the same
+short height — plain `padding-left:${depth*16}px` indent (unchanged since long before this) got
+noticeably harder to visually track once a row's Notes content pushed it taller than its siblings, a
+real reported readability regression from the wrap fix itself. `buildStaticTaskListHtml()`'s name
+cell now also prepends a small `└` (`.name-tree-connector`, muted, monospace) immediately before the
+name for any task with `depth > 0` — root tasks (`depth === 0`) get none, so the marker specifically
+flags "this is nested," rather than repeating per depth level (a design choice made explicitly over a
+per-level-repeated marker; both were mocked up and compared before picking this one). Indent still
+does the actual alignment; the connector is purely a visual anchor alongside it. Export-only, same as
+the Notes-wrap fix above — the interactive Task List doesn't have the variable-row-height problem this
+solves, since its own Notes cell is a fixed-height chip button, not wrapped text.
+
+**Follow-up: the Task column shrinks to fit the longest name instead of a fixed minimum, freeing that
+space for Notes (#51 follow-up).** `.col-name{min-width:220px;}` is sized for the *interactive* Task
+List, where the Task column needs room for an editable text input — `buildStaticTaskListHtml()`'s
+export inherited it too (same class, copied stylesheet) even though there's no input there, just
+static text, so a schedule with short names left a lot of unused whitespace in that column instead of
+shrinking to fit, at Notes' expense. `#task-table.export-table .col-name{min-width:0;}` overrides it
+for the export specifically — needs the `#task-table.export-table` ID+class prefix, not a
+same-or-lower-specificity class selector on its own, or it loses to the original `.col-name` rule
+(ID beats class regardless of source order); applies to both the `<th>` and the `<td>` (`.col-name` is
+used on both), since a column's rendered width has to fit its header too, not just its body cells —
+overriding only the body cell isn't enough on its own.
+
+The reclaimed space goes specifically to Notes, not left for `table-layout:auto` to redistribute
+unpredictably across every column, by giving Notes `width:100%` (`#task-table.export-table
+td.notes-export-cell{width:100%;}`) — the standard table-layout:auto idiom for "give any leftover
+width to this one column." **This is also why the Notes-wrap fix's own `max-width:320px` (above) was
+removed rather than kept alongside it:** empirically, a cell's `width:100%` sizing hint can still push
+its used width past its own `max-width` in `table-layout:auto` — confirmed by rendering both together
+and measuring a used width past the specified cap — so the two would just fight each other for no
+benefit; the wrap properties (`white-space:pre-wrap`/`overflow-wrap:break-word`) are what actually keep
+that column's *content* well-behaved regardless of how wide the column itself ends up being.
+
 ## Why a single file?
 
 This was a deliberate design constraint from the outset: "minimal / no dependencies and nothing to

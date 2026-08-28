@@ -280,6 +280,25 @@ table#task-table{
   vertical-align:middle;
   white-space:nowrap;
 }
+/* Notes column override, exported Task List only (#51) — the interactive Task List's own Notes
+   cell is just a "+ notes" chip button (see renderTaskTable()'s tdNotes), never raw text, so
+   #task-table td's shared nowrap is harmless there; it only actually bit buildStaticTaskListHtml()'s
+   static export, which inlines the real description/notes text and, without this, just widened the
+   whole table instead of wrapping. pre-wrap (not plain `normal`) matches the same choice already
+   made for this kind of free text elsewhere (see .hover-tooltip .tt-section) — it wraps long text
+   AND preserves line breaks the user actually typed into the Description/Notes fields, which `normal`
+   would otherwise collapse. overflow-wrap so one long unbroken token (a URL, say) still wraps instead
+   of pushing the column wide regardless. No max-width here (there originally was one, a fixed
+   320px) — this column is instead given the table's entire reclaimed leftover width via
+   `#task-table.export-table td.notes-export-cell{width:100%;}` below (Task column sizing, #51
+   follow-up), and empirically a fixed max-width doesn't survive that: table-layout:auto's `width:100%`
+   sizing hint on a cell can still push its used width past its own max-width, so the two would just
+   fight each other with no benefit — pre-wrap/overflow-wrap alone are what keep this column's actual
+   *content* well-behaved regardless of how wide the column itself ends up. */
+#task-table td.notes-export-cell{
+  white-space:pre-wrap;
+  overflow-wrap:break-word;
+}
 #task-table tr.task-row:hover td{background:var(--row-hover-bg);}
 #task-table tr.is-parent td{background:var(--summary-bg); font-weight:600;}
 #task-table tr.is-parent:hover td{background:var(--row-parent-hover-bg);}
@@ -293,6 +312,26 @@ table#task-table{
 .cell-input:disabled{color:var(--text-mute); background:transparent; border-color:transparent;}
 .col-name{min-width:220px;}
 .name-wrap{display:flex; align-items:center; gap:4px;}
+/* Export Task List only (buildStaticTaskListHtml()) — a small tree connector marking any non-root
+   task, so its nesting level stays easy to spot at a glance once the Notes column wraps to multiple
+   lines and rows grow tall (see the Notes column wrap fix, #51): plain padding-left indent alone is
+   easy to lose track of once rows aren't all the same short height. Muted so it doesn't compete with
+   the task name next to it; flex:none so it can't be squeezed by the flex row it sits in. */
+.name-tree-connector{flex:none; color:var(--text-mute); font-family:var(--font-mono);}
+/* Export Task List only, via .export-table (buildStaticTaskListHtml()) — .col-name's own
+   min-width:220px above is sized for the interactive Task List, where the Task column needs room
+   for an editable text input; the exported table has no input, just plain text, so that min-width
+   just left a lot of unused whitespace next to short names instead of shrinking to fit the actual
+   content and freeing up room for Notes. Needs `#task-table .col-name` (matching #task-table td's
+   own ID-selector specificity) rather than a same-specificity-or-lower class selector, or this loses
+   to .col-name's min-width — it doesn't win by appearing later, ID beats class regardless of source
+   order. Applies to both the `<th>` and `<td>` (".col-name" is used on both) — overriding only the
+   body cell isn't enough, since a column's rendered width has to fit its header too. */
+#task-table.export-table .col-name{min-width:0;}
+/* The reclaimed space goes specifically to Notes (not left for the table-layout:auto algorithm to
+   redistribute across columns unpredictably) by making it the one column with width:100% — the
+   standard table-layout:auto trick for "give any leftover width to this specific column." */
+#task-table.export-table td.notes-export-cell{width:100%;}
 .milestone-mark{color:var(--accent); font-size:11px; flex:none;}
 /* Small presence-only indicator on the Gantt label row — deliberately no count/list, just a marker
    that this task has tags at all; the hover tooltip (g-name-txt's title, or the full hover-tooltip
@@ -1122,7 +1161,7 @@ function buildStaticTaskListHtml(){
   const rows = collectAllFlattened();
   if(!rows.length) return '<p class="hint">No tasks.</p>';
   const today = todayISO();
-  let html = `<table id="task-table" style="width:100%;"><thead><tr>
+  let html = `<table id="task-table" class="export-table" style="width:100%;"><thead><tr>
       <th class="col-name">Task</th><th style="width:64px;">Status</th><th>Start</th><th>End</th><th>Dur (d)</th><th>% Done</th><th>Resources</th><th>Tags</th><th>Notes</th>
     </tr></thead><tbody>`;
   for(const {task:t, depth} of rows){
@@ -1130,7 +1169,7 @@ function buildStaticTaskListHtml(){
     const overdue = !isParent && t.end && t.end<today && t.percentComplete<100;
     const notesText = [t.description, t.notes].filter(Boolean).join(' — ');
     html += `<tr class="task-row ${isParent?'is-parent':''} ${overdue?'is-overdue':''}">
-        <td class="col-name"><div class="name-wrap" style="padding-left:${depth*16}px;"><span>${escapeHtml(displayName(t))}</span></div></td>
+        <td class="col-name"><div class="name-wrap" style="padding-left:${depth*16}px;">${depth>0?'<span class="name-tree-connector">└</span>':''}<span>${escapeHtml(displayName(t))}</span></div></td>
         <td class="status-cell">${statusDotHtml(t.status)}</td>
         <td>${fmtDate(t.start)}</td>
         <td>${fmtDate(t.end)}</td>
@@ -1138,7 +1177,7 @@ function buildStaticTaskListHtml(){
         <td><div class="pct-cell"><span>${t.percentComplete}%</span><span class="pct-bar"><i style="width:${t.percentComplete}%"></i></span></div></td>
         <td>${escapeHtml((t.resources||[]).join(', '))}</td>
         <td>${escapeHtml((t.tags||[]).join(', '))}</td>
-        <td>${escapeHtml(notesText)}</td>
+        <td class="notes-export-cell">${escapeHtml(notesText)}</td>
       </tr>`;
   }
   html += `</tbody></table>`;

@@ -526,6 +526,32 @@ async function main() {
     check('calling exportStaticHTML() with no argument still exports all three sections', captured.includes('Gantt Chart') && captured.includes('>Task List<') && captured.includes('Status Summary'));
   }
 
+  console.log('\n--- Export HTML: Task List Notes column wraps instead of widening (#51) ---');
+  {
+    const t = D.state.tasks[0];
+    t.description = 'A fairly long description that should wrap onto multiple lines instead of stretching the table.';
+    t.notes = 'Line one\nLine two';
+    D.recalcAll();
+    const taskListHtml = window.buildStaticTaskListHtml();
+    check('the Notes cell carries the notes-export-cell class', /class="notes-export-cell"/.test(taskListHtml));
+    check('the Notes cell content (description + notes) is still present', taskListHtml.includes('A fairly long description') && taskListHtml.includes('Line one'));
+  }
+
+  console.log('\n--- Export HTML: Task List name cell shows a tree connector for nested tasks (#51 follow-up) ---');
+  {
+    const root = D.state.tasks[0];
+    const child = D.addTask(null, root.id);
+    child.name = 'A child task';
+    D.recalcAll();
+    const taskListHtml = window.buildStaticTaskListHtml();
+    const rootRowStart = taskListHtml.indexOf(window.displayName(root));
+    const childRowStart = taskListHtml.indexOf('A child task');
+    const rootRowHtml = taskListHtml.slice(taskListHtml.lastIndexOf('<tr', rootRowStart), rootRowStart);
+    const childRowHtml = taskListHtml.slice(taskListHtml.lastIndexOf('<tr', childRowStart), childRowStart);
+    check('a root task row has no tree connector', !rootRowHtml.includes('name-tree-connector'));
+    check('a nested task row has the tree connector', childRowHtml.includes('name-tree-connector'));
+  }
+
   console.log(`\n${passCount} passed, ${failCount} failed.\n`);
   process.exit(failCount > 0 ? 1 : 0);
 }

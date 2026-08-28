@@ -20,6 +20,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
   page around it) simply expanding to fit, the way the Task List and Status Summary sections already
   do in the same export. It now always expands to its full height; it still scrolls horizontally for
   a genuinely wide date range. (#53)
+- Export HTML: a long Description/Notes value in the Task List's Notes column just widened the whole
+  exported table instead of wrapping. It now wraps inside its own cell (preserving line breaks you
+  typed), letting the row grow taller instead. Since rows are no longer all the same height, nested
+  tasks now also get a small `└` marker next to their name, so the indent-only hierarchy stays easy
+  to follow at a glance. The Task column also no longer reserves a fixed minimum width sized for the
+  interactive table's editable input — it shrinks to fit the longest task name, freeing that space for
+  Notes instead. (#51)
 - Task edit modal: adding a genuinely new tag (not already used on any other task) in the Tags
   field looked like it silently did nothing — the checkbox list didn't update, with no confirmation
   the tag had been added. It only actually appeared (checked) after saving and reopening the modal.
