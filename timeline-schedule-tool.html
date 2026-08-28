@@ -1435,9 +1435,28 @@ function currentThemeVarsCss(){
   return css;
 }
 
-function exportStaticHTML(){
+/** Every section `exportStaticHTML()` can include, in the order they're offered/rendered. `key`
+ *  drives both the picker modal's checkbox `value` and `sections` (the object exportStaticHTML()
+ *  takes) — `build` is only called for a section actually selected, so an expensive render (Gantt
+ *  especially) isn't done for a section the user unchecked. */
+const EXPORT_SECTIONS = [
+  { key:'gantt', label:'Gantt Chart', build: buildStaticGanttHtml },
+  { key:'tasks', label:'Task List', build: buildStaticTaskListHtml },
+  { key:'dashboard', label:'Status Summary', build: buildStaticDashboardHtml },
+];
+
+/** `sections`: `{gantt, tasks, dashboard}` booleans, which of EXPORT_SECTIONS to include — see
+ *  openExportSectionsModal(), the only caller. Defaults to all three so calling this directly (e.g.
+ *  from a test, or a future non-interactive caller) reproduces the export's original behavior. */
+function exportStaticHTML(sections){
+  sections = sections || {gantt:true, tasks:true, dashboard:true};
   const styleText = document.querySelector('style').innerHTML;
   const generated = new Date().toLocaleString();
+  const sectionsHtml = EXPORT_SECTIONS.filter(s=>sections[s.key]).map(s=>`
+  <div class="export-section">
+    <h2>${escapeHtml(s.label)}</h2>
+    ${s.build()}
+  </div>`).join('');
   const html = `<!DOCTYPE html>
 <html lang="en">
 <head>
@@ -1461,24 +1480,48 @@ body{ padding:28px; overflow:auto; height:auto; }
     <h1>▦ ${escapeHtml(state.meta.name||'Untitled Schedule')}</h1>
     <div class="meta">Exported ${escapeHtml(generated)} · read-only snapshot, not connected to the original schedule</div>
   </div>
-
-  <div class="export-section">
-    <h2>Gantt Chart</h2>
-    ${buildStaticGanttHtml()}
-  </div>
-
-  <div class="export-section">
-    <h2>Task List</h2>
-    ${buildStaticTaskListHtml()}
-  </div>
-
-  <div class="export-section">
-    <h2>Status Summary</h2>
-    ${buildStaticDashboardHtml()}
-  </div>
+${sectionsHtml}
 </body>
 </html>`;
   triggerTextDownload(safeFilenameBase() + '-export.html', html, 'text/html');
+}
+
+/** Asks which of EXPORT_SECTIONS to include before exporting — see #btn-export's click handler,
+ *  the only entry point to this. Always opens with every section checked (the export's original,
+ *  only behavior before this existed); the choice isn't remembered between exports, on purpose —
+ *  each export is independent and most exports want everything anyway. */
+function openExportSectionsModal(){
+  const root = document.getElementById('modal-root');
+  const rowsHtml = EXPORT_SECTIONS.map(s=>
+    `<label class="pop-row"><input type="checkbox" class="export-section-cb" value="${s.key}" checked> ${escapeHtml(s.label)}</label>`
+  ).join('');
+  root.innerHTML = `<div class="modal-backdrop">
+    <div class="modal">
+      <div class="modal-head"><h3>Export HTML</h3><button data-act="close">&times;</button></div>
+      <div class="modal-body">
+        <p class="hint" style="margin:0;">Choose which sections to include in the exported page.</p>
+        <div>${rowsHtml}</div>
+      </div>
+      <div class="modal-foot">
+        <button class="sm-btn" data-act="close">Cancel</button>
+        <button class="sm-btn" style="background:var(--accent);color:#fff;border-color:var(--accent);" id="export-confirm-btn">Export</button>
+      </div>
+    </div>
+  </div>`;
+  root.querySelectorAll('[data-act="close"]').forEach(b=>b.addEventListener('click', closeModal));
+  const checkboxes = Array.from(root.querySelectorAll('.export-section-cb'));
+  const exportBtn = root.querySelector('#export-confirm-btn');
+  function refreshExportBtn(){
+    exportBtn.disabled = !checkboxes.some(cb=>cb.checked);
+  }
+  checkboxes.forEach(cb=>cb.addEventListener('change', refreshExportBtn));
+  refreshExportBtn();
+  exportBtn.addEventListener('click', ()=>{
+    const sections = {};
+    checkboxes.forEach(cb=>{ sections[cb.value] = cb.checked; });
+    closeModal();
+    exportStaticHTML(sections);
+  });
 }
 
 async function doOpen(){
@@ -3814,7 +3857,7 @@ document.getElementById('btn-save').addEventListener('click', doSave);
 document.getElementById('btn-save-as').addEventListener('click', doSaveAs);
 document.getElementById('btn-holidays').addEventListener('click', openHolidaysModal);
 document.getElementById('btn-about').addEventListener('click', openAboutModal);
-document.getElementById('btn-export').addEventListener('click', exportStaticHTML);
+document.getElementById('btn-export').addEventListener('click', openExportSectionsModal);
 document.getElementById('btn-print').addEventListener('click', ()=>{
   if(activeTab==='gantt'){
     printGanttChart();

@@ -464,6 +464,49 @@ async function main() {
     }, originalIds);
   }
 
+  console.log('\n--- Export HTML: section picker modal (#50) ---');
+  {
+    // Capture what would have been downloaded instead of actually triggering a browser download.
+    await page.evaluate(() => {
+      window.__lastExport = null;
+      window.triggerTextDownload = (filename, content) => { window.__lastExport = content; };
+    });
+
+    await page.click('#btn-export');
+    await page.waitForTimeout(150);
+    check('the export section picker opens', await page.locator('.modal-head h3').textContent() === 'Export HTML');
+    const allChecked = await page.evaluate(() => Array.from(document.querySelectorAll('.export-section-cb')).every(cb => cb.checked));
+    check('every section starts checked', allChecked);
+    check('Export is enabled while at least one section is checked', await page.locator('#export-confirm-btn').isEnabled());
+
+    // Uncheck all three — Export should disable.
+    await page.evaluate(() => document.querySelectorAll('.export-section-cb').forEach(cb => { cb.checked = false; cb.dispatchEvent(new Event('change')); }));
+    check('Export disables once every section is unchecked', await page.locator('#export-confirm-btn').isDisabled());
+
+    // Re-check just Task List, export, and confirm only that section made it into the output.
+    await page.evaluate(() => {
+      const cb = document.querySelector('.export-section-cb[value="tasks"]');
+      cb.checked = true;
+      cb.dispatchEvent(new Event('change'));
+    });
+    check('Export re-enables once a section is checked again', await page.locator('#export-confirm-btn').isEnabled());
+    await page.click('#export-confirm-btn');
+    await page.waitForTimeout(150);
+    check('the export modal closes after exporting', await page.locator('.modal-backdrop').count() === 0);
+    const exported = await page.evaluate(() => window.__lastExport);
+    check('exporting only Task List includes it', exported.includes('>Task List<'));
+    check('exporting only Task List omits the Gantt Chart section', !exported.includes('Gantt Chart'));
+    check('exporting only Task List omits the Status Summary section', !exported.includes('Status Summary'));
+
+    // Cancel should close without exporting.
+    await page.click('#btn-export');
+    await page.waitForTimeout(150);
+    await page.evaluate(() => { window.__lastExport = null; });
+    await page.click('.modal-foot [data-act="close"]');
+    await page.waitForTimeout(100);
+    check('Cancel closes the picker without exporting', await page.evaluate(() => window.__lastExport === null));
+  }
+
   console.log('\n--- Print rendering (the check that actually caught a real bug) ---');
   {
     // Trigger the Gantt print flow the same way a user clicking "Print / PDF" would,

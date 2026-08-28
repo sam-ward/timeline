@@ -1091,6 +1091,19 @@ wasn't good enough); if revisiting that idea, note that Mermaid's `gantt` diagra
 multi-level task nesting, partial-percent progress, or resource swimlanes, so it needs real
 simplification decisions, not a direct translation.
 
+**Section picker (#50):** clicking Export HTML doesn't export immediately — it opens
+`openExportSectionsModal()` first (the standard `.modal-backdrop`/`.modal` pattern, same as the
+holidays/notes/about modals), a checkbox per entry in `EXPORT_SECTIONS` (all checked by default, not
+remembered between exports — every export starts fresh, since most exports want everything and each
+one is independent of the last). `exportStaticHTML(sections)` then only calls the `build` function for
+a section actually selected, and only appends that `.export-section` block — so an unwanted section
+isn't just hidden in the output, it's never rendered at all. If you add a fourth section (a new
+`build*Html()` building block per the checklist above), add one entry to `EXPORT_SECTIONS` and nothing
+else needs to change — the modal's checkbox list and `exportStaticHTML()`'s filtering both derive from
+it. `sections` defaults to `{gantt:true, tasks:true, dashboard:true}` when omitted, so calling
+`exportStaticHTML()` directly (as the jsdom tests do) reproduces the export's original, pre-#50
+behavior without needing to go through the modal.
+
 **Gotcha: don't cap `.export-section`'s width.** It used to have `max-width:1400px`, which meant
 the exported page stopped growing past that regardless of how wide the browser window actually was
 — on anything wider (an ultrawide or a maximized window on a large monitor), that left dead space

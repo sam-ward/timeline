@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+### Added
+
+- Export HTML now asks which sections to include (Gantt Chart, Task List, Status Summary) before
+  exporting, all checked by default. Export is disabled until at least one is checked; an unchecked
+  section isn't just hidden from the output, it's never rendered. (#50)
+
 ### Fixed
 
 - Export HTML: the Gantt Chart section was wrapped in a fixed-height, scrollable box — any schedule
