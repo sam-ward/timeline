@@ -506,6 +506,26 @@ async function main() {
     check('the exported Gantt wrapper still scrolls horizontally', /overflow-x:\s*auto/.test(ganttHtml));
   }
 
+  console.log('\n--- Export HTML: section selection (#50) ---');
+  {
+    let captured = null;
+    window.triggerTextDownload = (filename, content) => { captured = content; };
+
+    window.exportStaticHTML({gantt:true, tasks:false, dashboard:false});
+    check('exporting only Gantt includes the Gantt section', captured.includes('Gantt Chart'));
+    check('exporting only Gantt omits the Task List section', !captured.includes('>Task List<'));
+    check('exporting only Gantt omits the Status Summary section', !captured.includes('Status Summary'));
+
+    captured = null;
+    window.exportStaticHTML({gantt:false, tasks:true, dashboard:true});
+    check('excluding Gantt omits it', !captured.includes('Gantt Chart'));
+    check('including Task List + Status Summary includes both', captured.includes('>Task List<') && captured.includes('Status Summary'));
+
+    captured = null;
+    window.exportStaticHTML(); // no argument — must reproduce the pre-#50 "export everything" default
+    check('calling exportStaticHTML() with no argument still exports all three sections', captured.includes('Gantt Chart') && captured.includes('>Task List<') && captured.includes('Status Summary'));
+  }
+
   console.log(`\n${passCount} passed, ${failCount} failed.\n`);
   process.exit(failCount > 0 ? 1 : 0);
 }
