@@ -262,8 +262,11 @@ async function main() {
     await page.click(`tr[data-id="${taskId}"] [data-act="tags"]`);
     await page.waitForTimeout(150);
     check('the tags popover opens', await page.locator('.popover .popover-head h4').textContent() === 'Tags');
+    check('the add-tag control starts collapsed behind a toggle link (#47)', await page.locator('.popover .tag-add-toggle-btn').isVisible());
+    check('the add-tag input is not present until the toggle is clicked', await page.locator('.popover .tag-add-input').count() === 0);
 
-    // Type a brand-new tag and press Enter, same as a user would.
+    // Reveal the add box, then type a brand-new tag and press Enter, same as a user would.
+    await page.click('.popover .tag-add-toggle-btn');
     await page.fill('.tag-add-input', 'PO');
     await page.press('.tag-add-input', 'Enter');
     await page.waitForTimeout(150);
@@ -288,11 +291,16 @@ async function main() {
     await page.evaluate((id) => openTaskEditModal(id), taskId);
     await page.waitForTimeout(150);
 
+    await page.click('#te-tags-wrap .tag-add-toggle-btn');
     await page.fill('#te-tags-wrap .tag-add-input', 'DOC');
     await page.press('#te-tags-wrap .tag-add-input', 'Enter');
     await page.waitForTimeout(100);
     const modelBeforeSave = await page.evaluate((id) => byId(id).tags || [], taskId);
     check('a tag added in the modal is NOT committed to the model until Save', modelBeforeSave.length === 0);
+    // #46: the checkbox list must reflect the new tag immediately, even though it isn't in the
+    // global allTags() vocabulary yet (nothing else has this tag, and it isn't saved yet either).
+    check('the newly-added tag appears checked in the modal list right away, before Save (#46)', await page.locator('#te-tags-wrap input[type=checkbox][value="DOC"]').isChecked());
+    check('the add box collapses back to the toggle link after a successful add', await page.locator('#te-tags-wrap .tag-add-toggle-btn').isVisible());
 
     await page.click('#te-save');
     await page.waitForTimeout(150);
@@ -302,6 +310,39 @@ async function main() {
     // case — see #btn-print's click handler) — restore it since this test left Task List active.
     await page.click('.tab-btn[data-tab="gantt"]');
     await page.waitForTimeout(200);
+  }
+
+  console.log('\n--- Tags: edit modal list caps early instead of growing the whole modal (#47 follow-up) ---');
+  {
+    // A tag list long enough to hit its own internal cap must not keep growing the modal itself —
+    // the modal should stay the same height whether there are just-over-the-cap tags or far more.
+    const taskId = await page.evaluate(() => state.tasks[0].id);
+    // This is the same "Design" task the earlier #26 tests already put 'DOC' on — save it so the
+    // Gantt indicator/tooltip test right after this one still finds it, rather than leaving the
+    // task with whatever synthetic tag set this test used.
+    const originalTags = await page.evaluate((id) => (byId(id).tags || []).slice(), taskId);
+    const heightWithFewTags = await page.evaluate((id) => {
+      byId(id).tags = Array.from({length: 8}, (_, i) => 'few' + i);
+      recalcAll(); renderAll();
+      openTaskEditModal(id);
+      return document.querySelector('.modal').getBoundingClientRect().height;
+    }, taskId);
+    // .modal-foot's Cancel button, not the generic closeModal() — this modal wires its own close
+    // affordances to teAttemptClose()/teClose(), which also removes the Escape keydown listener
+    // openTaskEditModal() adds to `document`. Calling the generic closeModal() directly would empty
+    // #modal-root without going through that cleanup, leaking the listener (see ARCHITECTURE.md's
+    // "Escape closes the modal" note) — it would then fire on a later, unrelated keydown and throw
+    // trying to read values off a modal that's no longer there.
+    await page.click('.modal-foot [data-act="close"]');
+    const heightWithManyTags = await page.evaluate((id) => {
+      byId(id).tags = Array.from({length: 25}, (_, i) => 'many' + i);
+      recalcAll(); renderAll();
+      openTaskEditModal(id);
+      return document.querySelector('.modal').getBoundingClientRect().height;
+    }, taskId);
+    check('the modal is the same height at 8 tags and 25 tags (list scrolls internally instead of growing the modal)', heightWithFewTags === heightWithManyTags);
+    await page.click('.modal-foot [data-act="close"]');
+    await page.evaluate((args) => { byId(args.id).tags = args.tags; recalcAll(); renderAll(); }, {id: taskId, tags: originalTags});
   }
 
   console.log('\n--- Tags: Gantt indicator and hover tooltip (#26) ---');

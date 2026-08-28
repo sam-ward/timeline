@@ -7,6 +7,23 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+### Fixed
+
+- Task edit modal: adding a genuinely new tag (not already used on any other task) in the Tags
+  field looked like it silently did nothing — the checkbox list didn't update, with no confirmation
+  the tag had been added. It only actually appeared (checked) after saving and reopening the modal.
+  The picker's row list was built from the global tag vocabulary alone, which doesn't include a tag
+  that's only been added to this modal's own uncommitted, not-yet-saved copy of the task; it now
+  also includes whatever's on that in-progress copy, so a newly-added tag shows up immediately. (#46)
+- Task edit modal: the "New tag..." input and Add button used to scroll away along with the tag
+  checkbox list instead of staying in view. They're now a `+ Add tag…` toggle pinned below the list
+  (outside its scroll area), which reveals the input/button in place when clicked and collapses back
+  after a successful add or when it loses focus — also saves vertical space in the modal. Applies to
+  the Task List's own Tags popover too, since it shares the same widget. The checkbox list itself now
+  also caps its own height earlier (fits ~4 rows before it scrolls internally) so a task with a lot of
+  tags no longer grows the whole modal past its own max-height and forces the entire modal to scroll,
+  header/footer included. (#47)
+
 ## [1.3.2] - 2026-08-23
 
 ### Fixed

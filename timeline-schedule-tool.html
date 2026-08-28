@@ -417,7 +417,24 @@ input.res-input{width:100%; min-width:100px; overflow:hidden; text-overflow:elli
 .pop-row:hover{background:var(--accent-light);}
 .pop-row .dep-name{flex:1; min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;}
 .pop-row .dep-date{flex:none; color:var(--text-mute); font-size:10.5px; font-family:var(--font-mono); margin-left:10px;}
-.tag-add-row{display:flex; gap:6px; margin-top:8px; padding-top:8px; border-top:1px solid var(--line);}
+/* .tag-add-zone sits below .popover-rows as a sibling, deliberately outside it, so it's never part
+   of that element's own scroll region — see the edit modal's #te-tags-wrap CSS comment for the bug
+   this avoids when both end up nested inside a second, outer scroll container instead. */
+.tag-add-zone{margin-top:8px; padding-top:8px; border-top:1px solid var(--line);}
+/* The edit modal's Tags list needs a tighter cap than .popover-rows' own default 220px (which is
+   sized for a floating popover with nowhere else to put an overflow, not for a field embedded inside
+   a modal that's already competing with every other field for the modal's own 86vh max-height —
+   see .modal's `overflow:auto`). Without this, a task with a lot of tags could grow the Tags field
+   enough to push the modal itself past that cap, at which point the *whole modal* scrolls as one
+   unit (header and footer included) instead of just the tag list — exactly the thing this field's
+   own internal scroll exists to avoid needing in the first place. */
+#te-tags-wrap .popover-rows{max-height:100px;}
+.tag-add-toggle-btn{
+  background:none; border:none; padding:2px 0; color:var(--accent-dark); font-size:12px; font-weight:600;
+  cursor:pointer;
+}
+.tag-add-toggle-btn:hover{text-decoration:underline;}
+.tag-add-row{display:flex; gap:6px;}
 .tag-add-input{
   flex:1; min-width:0; box-sizing:border-box; padding:5px 8px; border:1px solid var(--line-strong);
   border-radius:5px; font-size:12px; background:var(--paper); color:var(--text);
@@ -2698,36 +2715,79 @@ function addTagToTask(t, rawTag){
   return true;
 }
 
-/** Renders the shared tag-picker widget (checkbox list of every tag used anywhere, plus an "add a
- *  new tag" field) into `container`, and wires it up against task `t`. `onChange` runs after every
- *  toggle/add — the Task List popover uses it to recalc+re-render+reopen itself (same pattern as
- *  the Deps popover); the edit modal uses it to just refresh its own snapshot-comparison state,
- *  since the modal's own Save/Cancel flow handles committing the change. */
+/** Renders the shared tag-picker widget (checkbox list of every tag used anywhere, plus a
+ *  collapsible "add a new tag" control) into `container`, and wires it up against task `t`.
+ *  `onChange` runs after every toggle/add — the Task List popover uses it to recalc+re-render+
+ *  reopen itself (same pattern as the Deps popover); the edit modal uses it to just refresh its own
+ *  snapshot-comparison state, since the modal's own Save/Cancel flow handles committing the change.
+ *
+ *  The row list is built from the union of `allTags()` (the global vocabulary, scanned from
+ *  `state.tasks`) and `t.tags` itself, not `allTags()` alone (#46). `t` isn't always a real,
+ *  already-committed task — the edit modal passes a local `pendingTags` clone that only gets written
+ *  back to the real task on Save (see `openTaskEditModal()`'s "commit only on Save" model). A
+ *  brand-new tag typed into the add box lands in `t.tags` immediately, but has no way to reach
+ *  `state.tasks` (and therefore `allTags()`) until Save + a future call to this function — so without
+ *  the union, a newly-added tag would render as if the add silently did nothing, and only actually
+ *  appear (checked) the next time the popover/modal opens after being saved. */
 function renderTagPickerInto(container, t, onChange){
-  const tags = allTags();
+  const tags = Array.from(new Set([...allTags(), ...(t.tags||[])])).sort();
   const rowsHtml = tags.length ? tags.map(tag=>{
     const checked = (t.tags||[]).includes(tag);
     return `<label class="pop-row"><input type="checkbox" value="${escapeAttr(tag)}" ${checked?'checked':''}> ${escapeHtml(tag)}</label>`;
   }).join('') : `<div class="pop-empty">No tags yet — add one below.</div>`;
   container.innerHTML = `<div class="popover-rows">${rowsHtml}</div>
-    <div class="tag-add-row">
-      <input type="text" class="tag-add-input" placeholder="New tag..." maxlength="40">
-      <button type="button" class="sm-btn tag-add-btn">Add</button>
-    </div>`;
+    <div class="tag-add-zone"><button type="button" class="tag-add-toggle-btn">+ Add tag…</button></div>`;
   container.querySelectorAll('input[type=checkbox]').forEach(cb=>{
     cb.addEventListener('change', ()=>{
       t.tags = Array.from(container.querySelectorAll('input[type=checkbox]:checked')).map(x=>x.value);
       onChange();
     });
   });
-  const addInput = container.querySelector('.tag-add-input');
-  const addBtn = container.querySelector('.tag-add-btn');
-  const doAdd = ()=>{ if(addTagToTask(t, addInput.value)) onChange(); };
-  addBtn.addEventListener('click', doAdd);
-  addInput.addEventListener('keydown', e=>{
-    if(e.key==='Enter'){ e.preventDefault(); doAdd(); }
-  });
-  addInput.addEventListener('click', e=>e.stopPropagation());
+
+  // The add box (#47) is collapsed behind a small toggle link by default, rather than always
+  // visible, both to save space and — for the edit modal specifically — so it never needs to sit
+  // inside the same scrollable region as the checkbox list above it (see the `.tag-add-zone` CSS
+  // comment for why that combination used to make the add box scroll away with the list). Opening/
+  // closing it is a local DOM swap, not a call to `onChange()`: it isn't a data change, so it
+  // shouldn't recalc/re-render/reopen anything, and doing so would immediately re-collapse it.
+  const addZone = container.querySelector('.tag-add-zone');
+  // Every listener below that swaps addZone's own innerHTML (the toggle button's own click, most
+  // importantly) needs stopPropagation(): the swap detaches the clicked element from the document
+  // mid-bubble, so by the time the click event would otherwise reach the document-level "outside
+  // click" listener that closes an open popover (outsideTagsPopoverClick), e.target.closest('.popover')
+  // resolves against an already-detached node and finds nothing — read as a click outside the
+  // popover, closing it right as it was supposed to open the add row. Same idiom the add-input's own
+  // click listener below already uses, for the same underlying reason.
+  function showToggle(){
+    addZone.innerHTML = `<button type="button" class="tag-add-toggle-btn">+ Add tag…</button>`;
+    addZone.querySelector('.tag-add-toggle-btn').addEventListener('click', e=>{ e.stopPropagation(); showAddRow(); });
+  }
+  function showAddRow(){
+    addZone.innerHTML = `<div class="tag-add-row">
+      <input type="text" class="tag-add-input" placeholder="New tag..." maxlength="40">
+      <button type="button" class="sm-btn tag-add-btn">Add</button>
+    </div>`;
+    const addInput = addZone.querySelector('.tag-add-input');
+    const addBtn = addZone.querySelector('.tag-add-btn');
+    const doAdd = ()=>{ if(addTagToTask(t, addInput.value)) onChange(); };
+    // mousedown (not click) with preventDefault keeps focus in the input instead of letting the
+    // button steal it — otherwise the resulting `blur` on the input would collapse the add row
+    // (see the input's own `blur` listener below) before the button's `click` event ever fires,
+    // silently swallowing the click.
+    addBtn.addEventListener('mousedown', e=>e.preventDefault());
+    // stopPropagation for the same detached-target-mid-bubble reason as the toggle button above:
+    // a successful add's onChange() rebuilds/reopens the whole popover (or, in the modal, at least
+    // this whole tags widget) synchronously, detaching this very button before the click event would
+    // otherwise reach the document-level outside-click listener.
+    addBtn.addEventListener('click', e=>{ e.stopPropagation(); doAdd(); });
+    addInput.addEventListener('keydown', e=>{
+      if(e.key==='Enter'){ e.preventDefault(); doAdd(); }
+    });
+    addInput.addEventListener('click', e=>e.stopPropagation());
+    addInput.addEventListener('blur', showToggle);
+    addInput.focus();
+  }
+  addZone.querySelector('.tag-add-toggle-btn').addEventListener('click', e=>{ e.stopPropagation(); showAddRow(); });
 }
 
 function openTagsPopover(anchorBtn, taskId){
@@ -2906,7 +2966,11 @@ function openTaskEditModal(taskId){
 
         <div class="field">
           <label>Tags</label>
-          <div style="max-height:130px; overflow:auto; border:1px solid var(--line-strong); border-radius:6px; padding:8px 14px 8px 8px;" id="te-tags-wrap"></div>
+          <!-- No max-height/overflow here (unlike #te-dep-rows above) — deliberately. renderTagPickerInto()'s
+               own .popover-rows already scrolls internally at its own max-height; wrapping it in a second,
+               outer scroll container used to nest the add-tag control inside that outer scroll too,
+               scrolling it away with the list instead of leaving it pinned below (#47). -->
+          <div style="border:1px solid var(--line-strong); border-radius:6px; padding:8px 14px 8px 8px;" id="te-tags-wrap"></div>
         </div>
 
         <div class="field"><label>Description</label><textarea id="te-desc">${escapeHtml(t.description)}</textarea></div>
