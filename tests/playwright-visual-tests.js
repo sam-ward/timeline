@@ -421,6 +421,49 @@ async function main() {
     check('the Gantt hover tooltip includes a Tags section for a tagged task', info.tooltipHtml.includes('Tags') && info.tooltipHtml.includes('DOC'));
   }
 
+  console.log('\n--- Export HTML: Gantt section expands fully, no scrollbar (#53) ---');
+  {
+    // Pad the schedule with enough rows that the old fixed max-height:520px wrapper would have
+    // forced an internal vertical scrollbar.
+    const originalIds = await page.evaluate(() => state.tasks.map(t => t.id));
+    await page.evaluate(() => {
+      for (let i = 0; i < 25; i++) addTask(null);
+      recalcAll(); renderAll();
+    });
+
+    // Capture what would have been downloaded instead of actually triggering a browser download.
+    const exportedHtml = await page.evaluate(() => {
+      let captured = null;
+      window.triggerTextDownload = (filename, content) => { captured = content; };
+      exportStaticHTML();
+      return captured;
+    });
+    // Scoped to the Gantt section's own wrapper markup specifically, not the whole exported page —
+    // the copied stylesheet legitimately has unrelated max-height rules elsewhere (popovers, the
+    // holiday list, etc.), so a blanket search across the whole document would false-positive on those.
+    const ganttSectionHtml = exportedHtml.slice(exportedHtml.indexOf('Gantt Chart'), exportedHtml.indexOf('Task List'));
+    check('the exported Gantt wrapper has no max-height', !/max-height/.test(ganttSectionHtml));
+
+    // Render the exported HTML itself in a fresh page and confirm the Gantt section actually has
+    // no scrollbar and isn't clipped — not just that the style string looks right, but that a real
+    // browser laying it out agrees.
+    const exportPage = await browser.newPage({ viewport: { width: 1000, height: 700 } });
+    await exportPage.setContent(exportedHtml);
+    const ganttMetrics = await exportPage.evaluate(() => {
+      const section = Array.from(document.querySelectorAll('.export-section')).find(s => s.querySelector('h2').textContent === 'Gantt Chart');
+      const wrap = section.querySelector(':scope > div');
+      return { scrollHeight: wrap.scrollHeight, clientHeight: wrap.clientHeight };
+    });
+    check('the exported Gantt wrapper is not vertically clipped (scrollHeight === clientHeight)', ganttMetrics.scrollHeight === ganttMetrics.clientHeight);
+    await exportPage.screenshot({ path: path.join(OUT_DIR, 'export-gantt-full-height.png'), fullPage: true });
+    await exportPage.close();
+
+    await page.evaluate((ids) => {
+      state.tasks = state.tasks.filter(t => ids.includes(t.id));
+      recalcAll(); renderAll();
+    }, originalIds);
+  }
+
   console.log('\n--- Print rendering (the check that actually caught a real bug) ---');
   {
     // Trigger the Gantt print flow the same way a user clicking "Print / PDF" would,

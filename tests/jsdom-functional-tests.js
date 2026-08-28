@@ -495,6 +495,17 @@ async function main() {
       D.state.tasks.length === before);
   }
 
+  console.log('\n--- Export HTML: Gantt section is not height-capped (#53) ---');
+  {
+    // Enough rows that the old fixed max-height:520px would have kicked in.
+    for (let i = 0; i < 25; i++) D.addTask(null);
+    D.recalcAll();
+    const ganttHtml = window.buildStaticGanttHtml();
+    check('the exported Gantt wrapper has no max-height', !/max-height/.test(ganttHtml));
+    check('the exported Gantt wrapper has no vertical overflow', !/overflow-y|overflow:\s*auto/.test(ganttHtml));
+    check('the exported Gantt wrapper still scrolls horizontally', /overflow-x:\s*auto/.test(ganttHtml));
+  }
+
   console.log(`\n${passCount} passed, ${failCount} failed.\n`);
   process.exit(failCount > 0 ? 1 : 0);
 }

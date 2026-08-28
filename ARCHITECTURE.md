@@ -1096,9 +1096,22 @@ the exported page stopped growing past that regardless of how wide the browser w
 — on anything wider (an ultrawide or a maximized window on a large monitor), that left dead space
 on the right instead of the content filling it, a real reported complaint. Removed; the section now
 just fills `body`'s own width (which itself is unconstrained, only padded). This is safe specifically
-because the Gantt content already has its own inner `overflow:auto` wrapper
+because the Gantt content already has its own inner `overflow-x:auto` wrapper
 (`buildStaticGanttHtml()`) for genuinely wide date ranges — the outer section never needed to be the
 thing providing width-limiting/scroll behavior, it was just an unrelated leftover constraint.
+
+**Gotcha: don't cap `.export-section`'s (or the Gantt wrapper's own) height either, for the same
+reason (#53).** `buildStaticGanttHtml()`'s wrapper used to also carry a fixed `max-height:520px` with
+`overflow:auto`, unrelated to the chart's actual rendered height — any schedule with enough rows to
+exceed it got an internal vertical scrollbar instead of the section (and the page around it) simply
+growing to fit, the vertical counterpart to the width gotcha just above. This is a read-only,
+standalone snapshot, not the interactive on-screen view, so there's no interactive reason to
+height-constrain it. Fixed by dropping `max-height`/vertical `overflow` from that wrapper entirely —
+`overflow-x:auto` stays, since a very wide date range is still a legitimate reason to scroll
+horizontally rather than shrink everything illegibly (same reasoning `computePrintGanttParams()`
+documents for print). If you touch this again: only the vertical cap was ever the problem here: don't
+reintroduce a fixed height constant of any kind on this wrapper, but the horizontal one is intentional
+and should stay.
 
 ## Why a single file?
 
